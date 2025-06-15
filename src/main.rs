@@ -1,4 +1,6 @@
 mod schema;
+mod gen_docker;
+mod llm;
 use std::collections::HashMap;
 use std::fmt::format;
 use std::fs::{File, OpenOptions};
@@ -417,21 +419,22 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {{
 // todo: kick off postgress 
 // https://users.rust-lang.org/t/how-to-execute-a-root-command-on-linux/50066/7
 // docker run --name some-postgres -e POSTGRES_USER=dbuser -e POSTGRES_PASSWORD=p -e POSTGRES_DB=work -p 1111:5432 -d postgres
-
-fn main() -> Result<(), io::Error> {
+#[tokio::main]
+async fn main() -> Result<(), std::io::Error> {
+    //test 
+    let chat = llm::llm().await;
+    println!("{chat}");
     let r = create_rows_from_sql("../testing/migrations/0001_data.sql");
     // println!("Table names: {:?}", rows.iter().map(|row| row.name.clone()).collect::<Vec<String>>());
     let rows = match r {
         Ok(rows) => rows,
         Err(e) => {
-            eprintln!("Error creating rows from SQL: {}, likely the file does not exit", e);
-            return Err(e);
+            panic!("Error creating rows from SQL: {}, likely the file does not exit", e);
         }
-        
     };
     let path = "../testing/src/main.rs";
     let mut func_names = Vec::new();
-    add_top_boilerplate(path);
+    add_top_boilerplate(path)?;
     for row in rows {
         println!("Row: {:?} \n", row);
         generate_struct(&row, path)?;
@@ -441,7 +444,7 @@ fn main() -> Result<(), io::Error> {
             func_names.push(add_get_one_func(&row, col, path)?);
         }
     }
-    add_axum_end(func_names, path);
+    add_axum_end(func_names, path)?;
     print!("docker run --name work -e POSTGRES_USER=dbuser   -e POSTGRES_PASSWORD=p   -e POSTGRES_DB=work   -p 1111:5432   -d postgres:latest");
     Ok(())
 }
@@ -503,3 +506,15 @@ mod tests {
     }
 }
 
+// CICD plan 
+// make a docker file that exposese port
+// make docker compose yaml to start postgres (and volume), and rust (and exposse to internet)
+//
+
+// add ai to make desisions about what to add 
+// * test ollama based on videos 
+// * get function calling working 
+// * use funciton calling to call functions to generate code 
+
+// at some point should ... 
+// should add RTC streams,and sockets (will help for streaming llm stuff) 
