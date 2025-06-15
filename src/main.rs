@@ -423,7 +423,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {{
 async fn main() -> Result<(), std::io::Error> {
     //test 
     let chat = llm::llm().await;
-    println!("{chat}");
+    println!("{chat:?}");
     let r = create_rows_from_sql("../testing/migrations/0001_data.sql");
     // println!("Table names: {:?}", rows.iter().map(|row| row.name.clone()).collect::<Vec<String>>());
     let rows = match r {
