@@ -1,11 +1,11 @@
 mod schema;
 mod gen_docker;
-mod llm;
+mod gen_sql;
+use gen_sql::gen_sql;
 use std::collections::HashMap;
 use std::fmt::format;
-use std::fs::{File, OpenOptions};
-use std::fs;
-use std::io;
+use std::fs::OpenOptions;
+use std::io::{self, BufWriter};
 use convert_case::{Case, Casing};
 use serde::de::value::{self, Error};
 use serde::Deserialize;
@@ -87,7 +87,12 @@ fn create_type_map() -> HashMap<String, String> {
 }
 
 
-fn generate_struct(row: &Row, file_path: &str) -> Result<(), std::io::Error> {
+fn generate_struct(row: &Row, file_path: &std::path::Path) -> Result<(), std::io::Error> {
+    // Ensure parent directories exist
+    if let Some(parent) = file_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    
     let type_map = create_type_map();
     let struct_name = row.name.to_case(Case::Pascal); // Convert table name to PascalCase
     let mut struct_string = format!("#[derive(Debug, Deserialize, FromRow)]\nstruct {} {{\n", struct_name);
@@ -120,9 +125,9 @@ fn generate_struct(row: &Row, file_path: &str) -> Result<(), std::io::Error> {
     Ok(())
 }
 
-fn create_rows_from_sql(file_path: &str) -> Result<Vec<Row>, io::Error> {
-    let table_names = extract_table_names(file_path)?;
-    let schemas = extract_table_schemas(file_path)?;
+fn create_rows_from_sql(file_path: &std::path::Path) -> Result<Vec<Row>, io::Error> {
+    let table_names = extract_table_names(&file_path.display().to_string())?;
+    let schemas = extract_table_schemas(&file_path.display().to_string())?;
     let mut rows: Vec<Row> = Vec::new();
 
     if table_names.len() != schemas.len() {
@@ -153,7 +158,12 @@ fn create_rows_from_sql(file_path: &str) -> Result<Vec<Row>, io::Error> {
 
 
 // id wil lcouse problems
-fn add_insert_func(row: &Row, file_path: &str) -> Result<String, io::Error> {
+fn add_insert_func(row: &Row, file_path: &std::path::Path) -> Result<String, io::Error> {
+    // Ensure parent directories exist
+    if let Some(parent) = file_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    
     let funk_name = format!("add_{}", row.name.clone());
     let struct_name = row.name.clone().to_case(Case::Pascal);
     let table_name = row.name.clone();
@@ -179,7 +189,7 @@ async fn {funk_name}(
     Json(payload): Json<{struct_name}>,
 ) -> Json<Value> {{
     let query = "INSERT INTO {table_name} ({cols}) VALUES ({feilds}) RETURNING *";
-
+    
     let q = sqlx::query_as::<_, {struct_name}>(&query)
         {bind_feilds};
     
@@ -210,7 +220,7 @@ async fn {funk_name}(
 
 
 
-fn add_get_one_func(row: &Row, col: &Col, file_path: &str) -> Result<String, io::Error> {
+fn add_get_one_func(row: &Row, col: &Col, file_path: &std::path::Path) -> Result<String, io::Error> {
     let type_map = create_type_map();
     let row_name = row.name.clone();
     let col_name = col.name.clone();
@@ -270,18 +280,23 @@ async fn {func_name}(
     Ok(func_name.to_string())
 }
 
-
-
-fn add_get_all_func(row: &Row, file_path: &str) -> Result<String, io::Error> {
+fn add_get_all_func(row: &Row, file_path: &std::path::Path) -> Result<String, io::Error> {
+    // Ensure parent directories exist
+    if let Some(parent) = file_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    
     let row_name = row.name.clone();
     let func_name = format!("get_{}", row.name.clone());
     let struct_name = row.name.clone().to_case(Case::Pascal);
-    let cols: String = row.cols.iter().map(|col| format!("\t\"{}\": elemint.{}, \n", 
-        col.name, col.name)
-        .to_string()).collect::<String>()
-        .trim_end_matches(", ").to_string();
     
-
+    // Generate the JSON fields for the response
+    let cols: String = row.cols.iter()
+        .map(|col| format!("\t\"{}\": elemint.{}, \n", col.name, col.name))
+        .collect::<String>()
+        .trim_end_matches(", \n")
+        .to_string();
+    
     let funk_str = format!(r###"
 
 async fn {func_name}(
@@ -298,38 +313,44 @@ async fn {func_name}(
         json!({{
     {cols}
         }})
-    
     }}).collect();
 
     Ok(Json(json!({{ "payload": res_json }})))
 }}
 "###);
 
-    let mut file = OpenOptions::new()
-        .write(true) // Enable writing to the file.
-        .append(true) // Set the append mode.  Crucially, this makes it append.
-        .create(true) // Create the file if it doesn't exist.
-        .open(file_path)?; // Open the file, returning a Result.
-
-    file.write_all(funk_str.as_bytes())?; // comment for testing 
-
+    // Open file with proper error handling
+    let file = OpenOptions::new()
+        .write(true)
+        .create(true)
+        .append(true)
+        .open(file_path)
+        .map_err(|e| {
+            eprintln!("Error opening file {}: {}", file_path.display(), e);
+            e
+        })?;
+        
+    let mut file = BufWriter::new(file);
+    file.write_all(funk_str.as_bytes())?;
 
     Ok(func_name.to_string())
 }
 
-fn add_top_boilerplate(file_path: &str) -> Result<(), io::Error> {
-    let f = OpenOptions::new()
+fn add_top_boilerplate(file_path: &std::path::Path) -> Result<(), io::Error> {
+    // Ensure parent directories exist
+    if let Some(parent) = file_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    
+    let mut file = OpenOptions::new()
         .write(true) // Enable writing to the file.
-        .append(true) // Set the append mode.  Crucially, this makes it append.
         .create(true) // Create the file if it doesn't exist.
-        .open(file_path); // Open the file, returning a Result.
-    let mut file = match f {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!("Error opening file: {}, it could not exist", e);
-            return Err(e);
-        }
-    };
+        .truncate(true) // Clear the file if it exists
+        .open(file_path)
+        .map_err(|e| {
+            eprintln!("Error opening file {}: {}", file_path.display(), e);
+            e
+        })?;
     let top_boiler = r###"
 use axum::{                                                                                                                                                                      
     extract::{self, Extension, Query},  
@@ -354,20 +375,21 @@ use axum::http::Method;
     Ok(())
 } 
 
-fn add_axum_end(funcs: Vec<String>, file_path: &str) -> Result<(), io::Error> {
-
-    let f = OpenOptions::new()
+fn add_axum_end(funcs: Vec<String>, file_path: &std::path::Path) -> Result<(), io::Error> {
+    // Ensure parent directories exist
+    if let Some(parent) = file_path.parent() {
+        std::fs::create_dir_all(parent)?;
+    }
+    
+    let mut file = OpenOptions::new()
         .write(true) // Enable writing to the file.
-        .append(true) // Set the append mode.  Crucially, this makes it append.
         .create(true) // Create the file if it doesn't exist.
-        .open(file_path); // Open the file, returning a Result.
-    let mut file = match f {
-        Ok(f) => f,
-        Err(e) => {
-            eprintln!("Error opening file: {}, it could not exist", e);
-            return Err(e);
-        }
-    };
+        .append(true) // Set the append mode.
+        .open(file_path)
+        .map_err(|e| {
+            eprintln!("Error opening file {}: {}", file_path.display(), e);
+            e
+        })?;
     let routs: String = funcs.iter().map(|func| {
         let http_method = if func.starts_with("get") { "get" } else { "post" };
         format!("\t.route(\"/{func}\", {http_method}({func}))\n").to_string()
@@ -423,33 +445,99 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {{
 // docker run --name some-postgres -e POSTGRES_USER=dbuser -e POSTGRES_PASSWORD=p -e POSTGRES_DB=work -p 1111:5432 -d postgres
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
-    //test 
-    //let chat = llm::llm().await;
-    //println!("{chat:?}");
-    let r = create_rows_from_sql("../testing/migrations/0001_data.sql");
-    // println!("Table names: {:?}", rows.iter().map(|row| row.name.clone()).collect::<Vec<String>>());
-    let rows = match r {
-        Ok(rows) => rows,
+    // Get project name from user
+    let mut file_name = String::new();
+    println!("Enter project name: ");
+    io::stdin().read_line(&mut file_name)?;
+    let file_name = file_name.trim().to_string();
+    
+    // Save current directory
+    let current_dir = std::env::current_dir()?;
+    
+    // Get the parent directory path
+    let parent_dir = std::env::current_dir()?.parent()
+        .ok_or_else(|| std::io::Error::new(
+            std::io::ErrorKind::Other,
+            "Cannot get parent directory"
+        ))?.to_path_buf();
+    
+    let project_dir = parent_dir.join(&file_name);
+    
+    // Create new cargo project
+    let output = Command::new("cargo")
+        .current_dir(&parent_dir)
+        .arg("new")
+        .arg(&file_name)
+        .output()?;
+        
+    if !output.status.success() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Failed to create new project: {}", String::from_utf8_lossy(&output.stderr))
+        ));
+    }
+    
+    // Generate SQL and create necessary files
+    println!("Generating SQL...");
+    match gen_sql::gen_sql(project_dir.clone(), file_name.clone()).await {
+        Ok(content) => {
+            println!("Successfully generated SQL ({} bytes)", content.len());
+            println!("SQL content preview: {}", content.chars().take(100).collect::<String>());
+        },
         Err(e) => {
-            panic!("Error creating rows from SQL: {}, likely the file does not exit", e);
-        }
-    };
-    let path = "../testing/src/main.rs";
-    let mut func_names = Vec::new();
-    add_top_boilerplate(path)?;
-    for row in rows {
-        println!("Row: {:?} \n", row);
-        generate_struct(&row, path)?;
-        func_names.push(add_insert_func(&row, path)?);
-        func_names.push(add_get_all_func(&row, path)?);
-        for col in &row.cols {
-            func_names.push(add_get_one_func(&row, col, path)?);
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::Other,
+                format!("Failed to generate SQL: {}", e)
+            ));
         }
     }
-    add_axum_end(func_names, path)?;
+    
+    // Change back to the original directory
+    println!("Changing back to original directory: {:?}", current_dir);
+    std::env::set_current_dir(&current_dir)?;
+    
+    // Process the generated SQL file
+    let sql_path = project_dir.join("migrations/0001_data.sql");
+    println!("Attempting to read SQL file from: {}", sql_path.display());
+    
+    // Verify file exists
+    if !std::path::Path::new(&sql_path).exists() {
+        return Err(std::io::Error::new(
+            std::io::ErrorKind::NotFound,
+            format!("SQL file does not exist at: {}", sql_path.display())
+        ));
+    }
+    
+    let r = create_rows_from_sql(&sql_path);
+    let rows = match r {
+        Ok(rows) => {
+            println!("Successfully parsed {} table definitions from SQL", rows.len());
+            rows
+        },
+        Err(e) => {
+            return Err(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("Error parsing SQL file at {}: {}", sql_path.display(), e)
+            ));
+        }
+    };
+    
+    let path = project_dir.join("src/main.rs");
+    let mut func_names = Vec::new();
+    add_top_boilerplate(&path)?;
+    for row in rows {
+        println!("Row: {:?} \n", row);
+        generate_struct(&row, &path)?;
+        func_names.push(add_insert_func(&row, &path)?);
+        func_names.push(add_get_all_func(&row, &path)?);
+        for col in &row.cols {
+            func_names.push(add_get_one_func(&row, col, &path)?);
+        }
+    }
+    add_axum_end(func_names, &path)?;
     let docker_res = gen_docker("testing");
     match docker_res {
-        Ok(_) => println!("Dockerfile created at {}", path.to_owned() + "/Dockerfile"),
+        Ok(_) => println!("Dockerfile created at {}", path.to_str().unwrap().to_owned() + "/Dockerfile"),
         Err(e) => eprintln!("Error creating Dockerfile: {}", e),
     }
     print!("docker run --name work -e POSTGRES_USER=dbuser   -e POSTGRES_PASSWORD=p   -e POSTGRES_DB=work   -p 1111:5432   -d postgres:latest");
