@@ -1,4 +1,3 @@
-use std::path::PathBuf;
 
 use ollama_rs::{coordinator::Coordinator, generation::chat::ChatMessage, Ollama};
 
@@ -52,7 +51,7 @@ pub async fn llm() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         .add_tool(get_cpu_temperature)
         .add_tool(get_weather);
         
-    let user_message = ChatMessage::user("what is the cpu temperature".to_owned());
+    let user_message = ChatMessage::user("what is the weather in seattle".to_owned());
     let resp = coordinator.chat(vec![user_message]).await?;
     Ok(resp.message.content.to_string())
 }

@@ -13,6 +13,7 @@ use sqlx::FromRow;
 use std::io::Write;
 pub use schema::{extract_column_info, extract_table_schemas, extract_table_names, Col};
 use std::process::{Command, Output};
+use gen_docker::gen_docker;
 
 
 #[derive(Debug)]
@@ -376,10 +377,11 @@ async fn health() -> String {{"healthy".to_string() }}
 
 #[tokio::main]
 async fn main() -> Result<(), Box<dyn std::error::Error>> {{
-    let db_url = "postgres://dbuser:p@localhost:1111/data";
+    let db_url = env::var("DATABASE_URL")
+     .unwrap_or_else(|_| "postgres://dbuser:p@localhost:1111/data".to_string());
     let pool = PgPoolOptions::new()
         .max_connections(100)
-        .connect(db_url)
+        .connect(&db_url)
         .await?;
 
     let migrate = sqlx::migrate!("./migrations").run(&pool).await;
@@ -422,8 +424,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {{
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     //test 
-    let chat = llm::llm().await;
-    println!("{chat:?}");
+    //let chat = llm::llm().await;
+    //println!("{chat:?}");
     let r = create_rows_from_sql("../testing/migrations/0001_data.sql");
     // println!("Table names: {:?}", rows.iter().map(|row| row.name.clone()).collect::<Vec<String>>());
     let rows = match r {
@@ -445,6 +447,11 @@ async fn main() -> Result<(), std::io::Error> {
         }
     }
     add_axum_end(func_names, path)?;
+    let docker_res = gen_docker("testing");
+    match docker_res {
+        Ok(_) => println!("Dockerfile created at {}", path.to_owned() + "/Dockerfile"),
+        Err(e) => eprintln!("Error creating Dockerfile: {}", e),
+    }
     print!("docker run --name work -e POSTGRES_USER=dbuser   -e POSTGRES_PASSWORD=p   -e POSTGRES_DB=work   -p 1111:5432   -d postgres:latest");
     Ok(())
 }
@@ -516,5 +523,19 @@ mod tests {
 // * get function calling working 
 // * use funciton calling to call functions to generate code 
 
+// make call other arbitary apis like with requests.
+// maybe function that takes in a url and schema struct and makes function that hits hits that url
+//      with data in the structs format 
+//   would consiter this working when can hit open ai api tools 
+
+
 // at some point should ... 
 // should add RTC streams,and sockets (will help for streaming llm stuff) 
+
+
+// auto make unit tests for all functions
+
+
+// add function to call ollama/apis  (can probably use comsom url in ollama_rs to hit open router endpoints) 
+
+// call python code that writen in a python file (just in case)

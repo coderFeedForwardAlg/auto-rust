@@ -1,25 +1,80 @@
+use std::{fs::OpenOptions, io::Write, fs::File};
 
-pub fn gen_docker() -> String {
+
+pub fn gen_docker(path: &str) -> Result<(), Box<dyn std::error::Error>> {
 let docker = format!(
 "
-version: '3.8'
+# -----------------------------------------------------------------------------
+#  Multi-stage Dockerfile for \"testing\" Rust / Axum API (production)
+# -----------------------------------------------------------------------------
+# 1. Builder image: compile the binary in release mode
+# -----------------------------------------------------------------------------
+FROM rustlang/rust:nightly-slim AS builder
 
-services:
-  backend:
-    build:
-      context: ./testing 
-      dockerfile: Dockerfile
-    ports:
-      - \"8081:8081\"
-    environment:
-      - NEXT_PUBLIC_API_URL=/api
-      - FRONT_END_URL=http://backend:8000
-    depends_on:
-      - postgres 
-    restart: unless-stopped
+# Install build dependencies that some crates (e.g. sqlx / openssl) may need
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends pkg-config libssl-dev ca-certificates \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create app directory inside the container
+WORKDIR /app
+
+# Cache dependencies first – copy manifest files only
+COPY Cargo.toml Cargo.lock ./
+
+# Set the default toolchain to nightly
+RUN rustup default nightly
+
+# Dummy main to build dependency layers and speed up subsequent builds
+# RUN echo \"fn main() {{}}\" > src/main.rs \
+#     && cargo build --release \
+#     && rm -rf src
+
+# Copy the actual source tree and build the real binary
+COPY . .
+RUN cargo build --release
+
+# -----------------------------------------------------------------------------
+# 2. Runtime image: copy the binary into a minimal base image
+# -----------------------------------------------------------------------------
+FROM debian:bookworm-slim AS runtime
+
+# Install certificates (TLS) & clean apt caches
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends ca-certificates libssl3 \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create an unprivileged user to run the app
+RUN useradd -m -u 10001 appuser
+
+WORKDIR /app
+
+# Copy compiled binary & any runtime assets (e.g. migrations)
+COPY --from=builder /app/target/release/{path} ./
+COPY --from=builder /app/migrations ./migrations
+
+# Ensure the binary is executable
+RUN chown -R appuser:appuser /app && chmod +x /app/{path}
+
+USER appuser
+
+# The application listens on port 8081 – expose it to the host
+EXPOSE 8081
+
+# Start the server
+CMD [\"/app/{path}\"]
 
 ");
-docker
+  let mut file = File::create("../".to_owned() + path + "/Dockerfile")?;
+  // let mut file = OpenOptions::new()
+  //       .write(true) // Enable writing to the file.
+  //       .append(true) // Set the append mode.  Crucially, this makes it append.
+  //       .create(true) // Create the file if it doesn't exist.
+  //       .open(path.to_owned() + "/Dockerfile")?; // Open the file, returning a Result.
+
+      file.write_all(docker.as_bytes())?; // comment for testing 
+      println!("Dockerfile created at {}", path.to_owned() + "/Dockerfile");
+      Ok(())
 }
 
 // docker build -t pangolin-testing .

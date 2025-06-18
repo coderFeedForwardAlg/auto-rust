@@ -78,3 +78,28 @@ docker
 docker run -d --name my-postgres -p 1111:5432 -e POSTGRES_USER=dbuser -e POSTGRES_PASSWORD=p -e POSTGRES_DB=work postgres
 
 
+Here is how you should write postgres SQL code to define a database. tables should be defined with CREATE TABLE IF NOT EXISTS. only use these datatypes: BOOL, "CHAR", SMALLINT, SMALLSERIAL, INT2, INT, SERIAL, INT4, BIGINT, BIGSERIAL, INT8, REAL, FLOAT4, DOUBLE PRECISION, FLOAT8, VARCHAR, CHAR(N), TEXT, NAME, CITEXT, BYTEA, VOID, INTERVAL, INT8RANGE, INT4RANGE, TSRANGE, TSTZRANGE, DATERANGE, TIMESTAMPTZ, TIMESTAMPTZ, TIMESTAMP, DATE, TIME, TIMETZ, UUID, INET, CIDR, INET, CIDR, INET, CIDR, INET, CIDR, MACADDR, BIT, VARBIT, JSON, JSONB, JSON, JSONB, JSON, JSONB. use unequ where nesisary (inline not at the bottom of the table). use gen_random_uuid when using uuids.  dont use numeric, insted use int or float or somting. dont use table names like `public."user"`. all tables should have a uuid that auto increments. Dont use any comments.  You need to write some sql to define a postgreSQL database to store runs for users. a user should have an email, name, and favoret running shoe.  a run should have a user, and started at date/time, and distance and a duration. each run should have exactly one user, but a user can have many runs. Dont output anything but the sql code.
+
+for example if i say "define a postgresSQL database that stores work sessions for users. each users has a start time, duration, break time, and a user. each user has an email and a name. each work session has exactly one user and each user can have many work sessions." then you should output ```
+CREATE DATABASE mydatabase;
+
+CREATE TABLE IF NOT EXISTS users (
+user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+email VARCHAR(255) UNIQUE NOT NULL,
+name VARCHAR(255)
+);
+
+CREATE TABLE IF NOT EXISTS work_sessions (
+work_session_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+user_id UUID NOT NULL REFERENCES users(user_id),
+start_time TIMESTAMPTZ NOT NULL,
+duration_seconds INT NOT NULL,
+break_duration_seconds INT NOT NULL DEFAULT 0
+);
+
+```
+
+now, use postgres SQL to define a database that tracks cups of coffee a user has drank. eash user should have an email and a name. the coffee table should have, type of coffee, the date it was drank, and the user that drank it.
+
+now, use postgres SQL to define a database  that tracks the runs of users. a user has an email and a name. a run has a start date/time, a duration, and a user. each run has exactly one user but a user can have many runs.
+ 
