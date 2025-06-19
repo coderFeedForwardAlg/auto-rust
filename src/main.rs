@@ -1,6 +1,7 @@
 mod schema;
 mod gen_docker;
 mod gen_sql;
+mod gen_toml;
 use gen_sql::gen_sql;
 use std::collections::HashMap;
 use std::fmt::format;
@@ -14,6 +15,8 @@ use std::io::Write;
 pub use schema::{extract_column_info, extract_table_schemas, extract_table_names, Col};
 use std::process::{Command, Output};
 use gen_docker::gen_docker;
+use crate::gen_toml::gen_toml;
+
 
 
 #[derive(Debug)]
@@ -462,6 +465,8 @@ async fn main() -> Result<(), std::io::Error> {
         ))?.to_path_buf();
     
     let project_dir = parent_dir.join(&file_name);
+
+    let _ = gen_toml(&project_dir, file_name.clone()).await;
     
     // Create new cargo project
     let output = Command::new("cargo")
@@ -524,6 +529,8 @@ async fn main() -> Result<(), std::io::Error> {
     
     let path = project_dir.join("src/main.rs");
     let mut func_names = Vec::new();
+    let toml_path = project_dir.join("Cargo.toml");
+    // let _ = gen_toml(&toml_path, file_name.clone()).await;
     add_top_boilerplate(&path)?;
     for row in rows {
         println!("Row: {:?} \n", row);
@@ -535,7 +542,7 @@ async fn main() -> Result<(), std::io::Error> {
         }
     }
     add_axum_end(func_names, &path)?;
-    let docker_res = gen_docker("testing");
+    let docker_res = gen_docker(project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
     match docker_res {
         Ok(_) => println!("Dockerfile created at {}", path.to_str().unwrap().to_owned() + "/Dockerfile"),
         Err(e) => eprintln!("Error creating Dockerfile: {}", e),
