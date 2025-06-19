@@ -62,10 +62,10 @@ USER appuser
 EXPOSE 8081
 
 # Start the server
-CMD [\"/app/{path}\"]
+CMD [\"/app/{project_dir}\"]
 
 ");
-  let mut file = File::create("../".to_owned() + path + "/Dockerfile")?;
+  let mut file = File::create(project_dir.to_owned() + "/Dockerfile")?;
   // let mut file = OpenOptions::new()
   //       .write(true) // Enable writing to the file.
   //       .append(true) // Set the append mode.  Crucially, this makes it append.
@@ -73,7 +73,7 @@ CMD [\"/app/{path}\"]
   //       .open(path.to_owned() + "/Dockerfile")?; // Open the file, returning a Result.
 
       file.write_all(docker.as_bytes())?; // comment for testing 
-      println!("Dockerfile created at {}", path.to_owned() + "/Dockerfile");
+      println!("Dockerfile created at {}", project_dir.to_owned() + "/Dockerfile");
       Ok(())
 }
 
