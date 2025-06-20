@@ -465,8 +465,9 @@ async fn main() -> Result<(), std::io::Error> {
         ))?.to_path_buf();
     
     let project_dir = parent_dir.join(&file_name);
+    println!("Project directory: {}", project_dir.display());
+    println!("Parent directory: {}", parent_dir.display());
 
-    let _ = gen_toml(&project_dir, file_name.clone()).await;
     
     // Create new cargo project
     let output = Command::new("cargo")
@@ -474,6 +475,9 @@ async fn main() -> Result<(), std::io::Error> {
         .arg("new")
         .arg(&file_name)
         .output()?;
+
+
+    let _ = gen_toml(&project_dir, file_name.clone()).await;
         
     if !output.status.success() {
         return Err(std::io::Error::new(
@@ -533,7 +537,6 @@ async fn main() -> Result<(), std::io::Error> {
     // let _ = gen_toml(&toml_path, file_name.clone()).await;
     add_top_boilerplate(&path)?;
     for row in rows {
-        println!("Row: {:?} \n", row);
         generate_struct(&row, &path)?;
         func_names.push(add_insert_func(&row, &path)?);
         func_names.push(add_get_all_func(&row, &path)?);
@@ -544,7 +547,7 @@ async fn main() -> Result<(), std::io::Error> {
     add_axum_end(func_names, &path)?;
     let docker_res = gen_docker(project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
     match docker_res {
-        Ok(_) => println!("Dockerfile created at {}", path.to_str().unwrap().to_owned() + "/Dockerfile"),
+        Ok(_) => println!("Dockerfile created at {}", project_dir.to_str().unwrap().to_owned()),
         Err(e) => eprintln!("Error creating Dockerfile: {}", e),
     }
     print!("docker run --name work -e POSTGRES_USER=dbuser   -e POSTGRES_PASSWORD=p   -e POSTGRES_DB=work   -p 1111:5432   -d postgres:latest");
