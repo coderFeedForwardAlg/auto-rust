@@ -1,6 +1,6 @@
 
 
-use std::{fs::File, io::Write};
+use std::{fs::{File, OpenOptions}, io::Write};
 
 /// Generates a TOML configuration file for a Rust project.
 ///
@@ -31,10 +31,11 @@ uuid = { version = \"1\", features = [\"serde\", \"v4\"] } # For UUID generation
 
     ";
  
-    let mut file = File::create(project_dir.join(file_name)).map_err(|e| {
-        eprintln!("Error creating file: {}", e);
-        e
-    })?;
+    let mut file = OpenOptions::new()
+        .write(true) // Enable writing to the file.
+        .append(true) // Set the append mode.  Crucially, this makes it append.
+        .create(true) // Create the file if it doesn't exist.
+        .open(project_dir.join("Cargo.toml"))?; // Open the file, returning a Result.
 
     file.write_all(deps.as_bytes()).map_err(|e| {
         eprintln!("Error writing to file: {}", e);

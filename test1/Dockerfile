@@ -1,21 +1,13 @@
-use std::{fs::OpenOptions, io::Write, fs::File};
 
-
-pub fn gen_docker(path: &str) -> Result<(), Box<dyn std::error::Error>> {
-    print!("{}\n", path);
-let docker = format!(
-"
 # -----------------------------------------------------------------------------
-#  Multi-stage Dockerfile for \"testing\" Rust / Axum API (production)
+#  Multi-stage Dockerfile for "testing" Rust / Axum API (production)
 # -----------------------------------------------------------------------------
 # 1. Builder image: compile the binary in release mode
 # -----------------------------------------------------------------------------
 FROM rustlang/rust:nightly-slim AS builder
 
 # Install build dependencies that some crates (e.g. sqlx / openssl) may need
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends pkg-config libssl-dev ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends pkg-config libssl-dev ca-certificates && rm -rf /var/lib/apt/lists/*
 
 # Create app directory inside the container
 WORKDIR /app
@@ -27,9 +19,7 @@ COPY Cargo.toml Cargo.lock ./
 RUN rustup default nightly
 
 # Dummy main to build dependency layers and speed up subsequent builds
-# RUN echo \"fn main() {{}}\" > src/main.rs \
-#     && cargo build --release \
-#     && rm -rf src
+# RUN echo "fn main() {}" > src/main.rs #     && cargo build --release #     && rm -rf src
 
 # Copy the actual source tree and build the real binary
 COPY . .
@@ -41,9 +31,7 @@ RUN cargo build --release
 FROM debian:bookworm-slim AS runtime
 
 # Install certificates (TLS) & clean apt caches
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends ca-certificates libssl3 \
-    && rm -rf /var/lib/apt/lists/*
+RUN apt-get update && apt-get install -y --no-install-recommends ca-certificates libssl3 && rm -rf /var/lib/apt/lists/*
 
 # Create an unprivileged user to run the app
 RUN useradd -m -u 10001 appuser
@@ -51,11 +39,11 @@ RUN useradd -m -u 10001 appuser
 WORKDIR /app
 
 # Copy compiled binary & any runtime assets (e.g. migrations)
-COPY --from=builder /app/target/release/{path} ./
+COPY --from=builder /app/target/release/test1 ./
 COPY --from=builder /app/migrations ./migrations
 
 # Ensure the binary is executable
-RUN chown -R appuser:appuser /app && chmod +x /app/{path}
+RUN chown -R appuser:appuser /app && chmod +x /app/test1
 
 USER appuser
 
@@ -63,19 +51,5 @@ USER appuser
 EXPOSE 8081
 
 # Start the server
-CMD [\"/app/{path}\"]
+CMD ["/app/test1"]
 
-");
-  // Create the directory if it doesn't exist
-  //std::fs::create_dir_all(path)?;
-  
-  let dockerfile_path = format!("../{}/Dockerfile", path);
-  
-  let mut file = File::create(&dockerfile_path)?;
-  file.write_all(docker.as_bytes())?;
-  
-  println!("Dockerfile created at {}", dockerfile_path);
-  Ok(())
-}
-
-// docker build -t pangolin-testing .
