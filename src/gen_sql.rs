@@ -23,7 +23,7 @@ pub async fn gen_sql(project_dir: std::path::PathBuf, file_name: String) -> Resu
     let history = vec![];
     let mut coordinator = Coordinator::new(ollama, model, history);
         
-    let prompt = r#"Here is how you should write postgres SQL code to define a database. 
+    let prompt = r#"you are a postgresSQL database designer. Here is how you should write postgres SQL code to define a database. 
     
     Tables should be defined with CREATE TABLE IF NOT EXISTS. 
     Only use these datatypes: 
@@ -41,6 +41,7 @@ pub async fn gen_sql(project_dir: std::path::PathBuf, file_name: String) -> Resu
     - Don't use table names like `public.\"user\"`
     - All tables should have a UUID primary key that auto-increments
     - Don't use any comments
+    - Output only the sql code, nothing else.
 
     Example:
     If I say "define a postgresSQL database that stores work sessions for users. 
@@ -48,7 +49,7 @@ pub async fn gen_sql(project_dir: std::path::PathBuf, file_name: String) -> Resu
     Each work session has exactly one user and each user can have many work sessions."
 
     You should output:
-    ```
+    
     CREATE TABLE IF NOT EXISTS users (
         user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
         email VARCHAR(255) UNIQUE NOT NULL,
@@ -62,13 +63,36 @@ pub async fn gen_sql(project_dir: std::path::PathBuf, file_name: String) -> Resu
         duration_seconds INT NOT NULL,
         break_duration_seconds INT NOT NULL DEFAULT 0
     );
-    ```
 
-    Now, create a database for tracking running activities:
-    - A user should have an email, name, and favorite running shoe
-    - A run should have a user, start time, distance, and duration
-    - Each run should have exactly one user, but a user can have many runs
-    - Output only the SQL code, nothing else."#;
+    Example 2:
+    if i say "define a postgresSQL database that stores users and runs. 
+    a user has a name, email, and favoret shoe. 
+    a run has a user, and started at date/time, and distance and a duration. 
+    each run should have exactly one user, but a user can have many runs. 
+    output only the sql code, nothing else."
+    
+    you should output:
+    
+    CREATE TABLE IF NOT EXISTS users (
+        user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        email VARCHAR(255) UNIQUE NOT NULL,
+        name VARCHAR(255)
+    );
+
+    CREATE TABLE IF NOT EXISTS runs (
+        run_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+        user_id UUID NOT NULL REFERENCES users(user_id),
+        start_time TIMESTAMPTZ NOT NULL,
+        distance_km FLOAT NOT NULL,
+        duration_seconds INT NOT NULL
+    );
+
+    
+
+    now make a database to store users and videos they upload. 
+    each user has a name, email, and password. 
+    each video has a title, description, a user, and a path to the video. 
+    each user can have many videos. "#;
 
     let user_message = ChatMessage::user(prompt.to_owned());
     let resp = coordinator.chat(vec![user_message]).await?;

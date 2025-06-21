@@ -70,7 +70,6 @@ CMD [\"/app/{path}\"]
   //std::fs::create_dir_all(path)?;
   
   let dockerfile_path = format!("../{}/Dockerfile", path);
-  
   let mut file = File::create(&dockerfile_path)?;
   file.write_all(docker.as_bytes())?;
   
