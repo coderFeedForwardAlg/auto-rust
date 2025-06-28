@@ -27,8 +27,9 @@ dotenv = \"0.15\" # Useful for loading environment variables like your database 
 tower-http = { version = \"0.5\", features = [\"cors\"] } # For CorsLayer
 chrono = { version = \"0.4\", features = [\"serde\"] } # For Utc
 uuid = { version = \"1\", features = [\"serde\", \"v4\"] } # For UUID generation and serialization
-
-
+tempfile = \"3.3\"
+anyhow = \"1.0\"
+minio-rsc = \"0.2.6\"
     ";
  
     let mut file = OpenOptions::new()

@@ -1,3 +1,10 @@
+use std::{fs::OpenOptions, io::Write, fs::File};
+
+
+pub fn add_compose(path: &str) -> Result<(), Box<dyn std::error::Error>> {
+    print!("{}\n", path);
+let compose = format!(
+"
 
 version: '3.8'
 
@@ -9,28 +16,28 @@ services:
       POSTGRES_PASSWORD: p
       POSTGRES_DB: data
     ports:
-      - "1111:5432"
+      - \"1111:5432\"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U dbuser -d data"]
+      test: [\"CMD-SHELL\", \"pg_isready -U dbuser -d data\"]
       interval: 5s
       timeout: 5s
       retries: 10
 
   minio:
     image: minio/minio:latest
-    command: server /data --console-address ":9001"
+    command: server /data --console-address \":9001\"
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
     ports:
-      - "9000:9000"  # API port
-      - "9001:9001"  # Console port
+      - \"9000:9000\"  # API port
+      - \"9001:9001\"  # Console port
     volumes:
       - minio_data:/data
     healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      test: [\"CMD\", \"curl\", \"-f\", \"http://localhost:9000/minio/health/live\"]
       interval: 30s
       timeout: 20s
       retries: 3
@@ -41,30 +48,30 @@ services:
     depends_on:
       - minio
     entrypoint: >
-      /bin/sh -c "
+      /bin/sh -c \"
       sleep 5;
       /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin;
       /usr/bin/mc mb myminio/test --ignore-existing;
       /usr/bin/mc policy set public myminio/test;
       exit 0;
-      "
+      \"
 
   app:
     build:
       context: .
       dockerfile: Dockerfile
     ports:
-      - "8082:8082"
+      - \"8081:8081\"
     environment:
-      DATABASE_URL: "postgres://dbuser:p@db:5432/data"
-      DATABASE_CONNECT_TIMEOUT: "30"
-      SQLX_OFFLINE: "true"
+      DATABASE_URL: \"postgres://dbuser:p@db:5432/data\"
+      DATABASE_CONNECT_TIMEOUT: \"30\"
+      SQLX_OFFLINE: \"true\"
     depends_on:
       db:
         condition: service_healthy
     restart: on-failure
     healthcheck:
-      test: ["CMD", "wget", "--spider", "http://localhost:8082/health"]
+      test: [\"CMD\", \"wget\", \"--spider\", \"http://localhost:8082/health\"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -74,3 +81,18 @@ volumes:
   postgres_data:
   minio_data:
 
+
+"
+);
+  // Create the directory if it doesn't exist
+  //std::fs::create_dir_all(path)?;
+  
+  let compose_path = format!("../{}/docker-compose.yaml", path);
+  let mut file = File::create(&compose_path)?;
+  file.write_all(compose.as_bytes())?;
+  
+  println!("compose created at {}", compose_path);
+  Ok(())
+}
+
+// docker build -t pangolin-testing .

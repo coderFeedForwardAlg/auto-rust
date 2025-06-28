@@ -1,3 +1,4 @@
+mod llm;
 mod schema;
 mod gen_docker;
 mod gen_sql;
@@ -5,7 +6,12 @@ mod gen_toml;
 mod add_functions;
 mod base_structs;
 mod select_funcs;
+mod add_compose;
+mod add_object;
 
+use llm::llm;
+use add_object::add_object;
+use add_compose::add_compose;
 use gen_sql::gen_sql;
 use std::collections::HashMap;
 use std::fmt::format;
@@ -74,10 +80,11 @@ fn add_top_boilerplate(file_path: &std::path::Path) -> Result<(), io::Error> {
         })?;
     let top_boiler = r###"
 use axum::{                                                                                                                                                                      
-    extract::{self, Extension, Query},  
+    extract::{self, Path, Query},  
     routing::{get, post},                                                                                                                                                        
     Json, Router,                        
-};                                                                                                                                    
+};       
+use minio_rsc::{Minio, provider::StaticProvider, client::PresignedArgs};
 use serde::Deserialize;                                                                                                                                                          
 use serde_json::{json, Value};                                                                                                                                                   
 use sqlx::PgPool;                                                                                                                                                                
@@ -90,6 +97,7 @@ use axum::http::StatusCode;
 use sqlx::types::chrono::Utc; 
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use axum::http::Method;
+
 "###;
     file.write_all(top_boiler.as_bytes())?; // comment for testing 
 
@@ -111,10 +119,11 @@ fn add_axum_end(funcs: Vec<String>, file_path: &std::path::Path) -> Result<(), i
             eprintln!("Error opening file {}: {}", file_path.display(), e);
             e
         })?;
-    let routs: String = funcs.iter().map(|func| {
+    let mut routs: String = funcs.iter().map(|func| {
         let http_method = if func.starts_with("get") { "get" } else { "post" };
         format!("\t.route(\"/{func}\", {http_method}({func}))\n").to_string()
     }).collect::<String>();
+    routs.push_str("\t.route(\"/signed-urls/:video_path\", get(get_signed_url))\n");
     let ending = format!(r###"
 async fn health() -> String {{"healthy".to_string() }}
 
@@ -167,6 +176,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {{
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     // Get project name from user
+    // let llm_res = llm(); // right now this calls functions 
+    // print!("{}", llm_res.await.unwrap());
     let mut file_name = String::new();
     println!("Enter project name: ");
     io::stdin().read_line(&mut file_name)?;
@@ -248,7 +259,7 @@ async fn main() -> Result<(), std::io::Error> {
             ));
         }
     };
-    
+
     let path = project_dir.join("src/main.rs");
     let mut func_names = Vec::new();
     let toml_path = project_dir.join("Cargo.toml");
@@ -265,13 +276,15 @@ async fn main() -> Result<(), std::io::Error> {
 
 
     add_select_funcs(rows, &path, &mut func_names)?;
+
+    add_object(&path);
     add_axum_end(func_names, &path)?;
     let docker_res = gen_docker(project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
     match docker_res {
         Ok(_) => println!("Dockerfile created at {}", project_dir.to_str().unwrap().to_owned()),
         Err(e) => eprintln!("Error creating Dockerfile: {}", e),
     }
-    print!("docker run --name work -e POSTGRES_USER=dbuser   -e POSTGRES_PASSWORD=p   -e POSTGRES_DB=work   -p 1111:5432   -d postgres:latest");
+    let compose = add_compose(project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
     Ok(())
 }
 
