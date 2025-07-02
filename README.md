@@ -1,1 +1,1 @@
-# an program to worite programs, starting with generating sql and ending in exposing endpoint.
+# A program to write programs, starting with generating SQL and ending with exposing endpoints.
