@@ -8,7 +8,9 @@ mod base_structs;
 mod select_funcs;
 mod add_compose;
 mod add_object;
+mod add_minio;
 
+use add_minio::add_minio;
 use llm::llm;
 use add_object::add_object;
 use add_compose::add_compose;
@@ -176,8 +178,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {{
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     // Get project name from user
-    // let llm_res = llm(); // right now this calls functions 
-    // print!("{}", llm_res.await.unwrap());
+    let llm_res = llm(); // right now this calls functions 
+    print!("{}", llm_res.await.unwrap());
     let mut file_name = String::new();
     println!("Enter project name: ");
     io::stdin().read_line(&mut file_name)?;
@@ -265,19 +267,11 @@ async fn main() -> Result<(), std::io::Error> {
     let toml_path = project_dir.join("Cargo.toml");
     // let _ = gen_toml(&toml_path, file_name.clone()).await;
     add_top_boilerplate(&path)?;
-    // for row in rows {
-    //     generate_struct(&row, &path)?;
-    //     func_names.push(add_functions::add_insert_func(&row, &path)?);
-    //     func_names.push(add_functions::add_get_all_func(&row, &path)?);
-    //     for col in &row.cols {
-    //         func_names.push(add_functions::add_get_one_func(&row, col, &path)?);
-    //     }
-    // }
-
+    
 
     add_select_funcs(rows, &path, &mut func_names)?;
 
-    add_object(&path);
+    // add_object(&path);
     add_axum_end(func_names, &path)?;
     let docker_res = gen_docker(project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
     match docker_res {
@@ -285,6 +279,15 @@ async fn main() -> Result<(), std::io::Error> {
         Err(e) => eprintln!("Error creating Dockerfile: {}", e),
     }
     let compose = add_compose(project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
+    match compose {
+        Ok(_) => println!("Docker compose created at {}", project_dir.to_str().unwrap().to_owned()),
+        Err(e) => eprintln!("Error creating Docker compose: {}", e),
+    }
+    let minio = add_minio(&project_dir.join("src/main.rs"));
+    match minio {
+        Ok(_) => println!("Minio added at {}", project_dir.to_str().unwrap().to_owned()),
+        Err(e) => eprintln!("Error adding Minio: {}", e),
+    }
     Ok(())
 }
 

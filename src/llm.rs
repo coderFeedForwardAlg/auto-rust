@@ -100,8 +100,7 @@ pub async fn llm() -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
         .add_tool(cut_video_segment);
         
     // Ok("ran".to_string())
-    let user_message = ChatMessage::user("
-    cut some part of the src/videos/test1.mp4 video".to_owned());
+    let user_message = ChatMessage::user("what is the cpu temperature".to_owned());
     let resp = coordinator.chat(vec![user_message]).await?;
     Ok(resp.message.content.to_string())
 }

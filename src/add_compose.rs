@@ -41,18 +41,18 @@ services:
       interval: 30s
       timeout: 20s
       retries: 3
-
-
+  
   createbuckets:
     image: minio/mc
     depends_on:
       - minio
     entrypoint: >
       /bin/sh -c \"
-      sleep 5;
-      /usr/bin/mc config host add myminio http://minio:9000 minioadmin minioadmin;
-      /usr/bin/mc mb myminio/test --ignore-existing;
-      /usr/bin/mc policy set public myminio/test;
+      sleep 10;
+        /usr/bin/mc alias set myminio http://minio:9000 minioadmin minioadmin || exit 1;
+        /usr/bin/mc mb myminio/bucket || true;
+        /usr/bin/mc anonymous set public myminio/bucket || exit 1;
+        echo 'Bucket creation completed successfully';
       exit 0;
       \"
 
