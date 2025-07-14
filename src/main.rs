@@ -9,7 +9,9 @@ mod select_funcs;
 mod add_compose;
 mod add_object;
 mod add_minio;
+mod ffmpeg;
 
+use ffmpeg::gen_ffmpeg;
 use add_minio::add_minio;
 use llm::llm;
 use add_object::add_object;
@@ -178,8 +180,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {{
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
     // Get project name from user
-    let llm_res = llm(); // right now this calls functions 
-    print!("{}", llm_res.await.unwrap());
+    // let llm_res = llm(); // right now this calls functions 
+    // print!("{}", llm_res.await.unwrap());
     let mut file_name = String::new();
     println!("Enter project name: ");
     io::stdin().read_line(&mut file_name)?;
@@ -208,14 +210,18 @@ async fn main() -> Result<(), std::io::Error> {
         .output()?;
 
 
-    let _ = gen_toml(&project_dir, file_name.clone()).await;
-        
+    // let _ = gen_toml(&project_dir).await;
+     
+    let _ = gen_ffmpeg(&project_dir, vec!["3 + 4".to_string()]).await;
+
+    
     if !output.status.success() {
         return Err(std::io::Error::new(
             std::io::ErrorKind::Other,
             format!("Failed to create new project: {}", String::from_utf8_lossy(&output.stderr))
         ));
     }
+
     
     // Generate SQL and create necessary files
     println!("Generating SQL...");
@@ -264,8 +270,6 @@ async fn main() -> Result<(), std::io::Error> {
 
     let path = project_dir.join("src/main.rs");
     let mut func_names = Vec::new();
-    let toml_path = project_dir.join("Cargo.toml");
-    // let _ = gen_toml(&toml_path, file_name.clone()).await;
     add_top_boilerplate(&path)?;
     
 
