@@ -225,7 +225,12 @@ async fn main() -> Result<(), std::io::Error> {
     
     // Generate SQL and create necessary files
     println!("Generating SQL...");
-    match gen_sql::gen_sql(project_dir.clone(), file_name.clone()).await {
+    let mut sql_task = String::new();
+    println!("Enter the specific task for the SQL database (e.g., 'make SQL to store users and their favored food'): ");
+    io::stdin().read_line(&mut sql_task)?;
+    let sql_task = sql_task.trim().to_string();
+
+    match gen_sql::gen_sql(project_dir.clone(), file_name.clone(), sql_task).await {
         Ok(content) => {
             println!("Successfully generated SQL ({} bytes)", content.len());
             println!("SQL content preview: {}", content.chars().take(100).collect::<String>());
@@ -299,8 +304,9 @@ async fn main() -> Result<(), std::io::Error> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use std::io;
+    use std::io::{self, Write};
     use std::fs;
+    use tempfile;
 
     #[test]
     fn test_extract_table_schemas() -> Result<(), io::Error> {
@@ -326,23 +332,17 @@ mod tests {
             quantity INTEGER
         );
         "#;
-        fs::write("test.sql", sql_content)?;
+        let mut temp_file = tempfile::NamedTempFile::new()?;
+        write!(temp_file, "{}", sql_content)?;
+        temp_file.flush()?;
 
         let expected_schemas = vec![
-            "id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            favorite_color VARCHAR(50),
-            height NUMERIC,
-            age INTEGER,
-            job VARCHAR(100)",
-            "product_id INTEGER PRIMARY KEY,
-            description TEXT,
-            price DECIMAL(10, 2)",
-            "order_id INTEGER,
-            item_id INTEGER,
-            quantity INTEGER",
+            "id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n            favorite_color VARCHAR(50),\n            height NUMERIC,\n            age INTEGER,\n            job VARCHAR(100)",
+            "product_id INTEGER PRIMARY KEY,\n            description TEXT,\n            price DECIMAL(10, 2)",
+            "order_id INTEGER,\n            item_id INTEGER,\n            quantity INTEGER",
         ];
 
-        let schemas = extract_table_schemas("test.sql")?;
+        let schemas = extract_table_schemas(temp_file.path().to_str().unwrap())?;
         assert_eq!(schemas.len(), expected_schemas.len());
         for (i, schema) in schemas.iter().enumerate() {
             assert_eq!(schema.trim(), expected_schemas[i].trim());
