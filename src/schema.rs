@@ -7,24 +7,26 @@ pub fn extract_table_schemas(file_path: &str) -> Result<Vec<String>, io::Error> 
     let lower_contents = contents.to_lowercase();
     let mut start_index = 0;
 
-    while let Some(create_index) = lower_contents[start_index..].find("create table if not exists") {
+    while let Some(create_index) = lower_contents[start_index..].find("create table") {
         let start = start_index + create_index;
         if let Some(open_paren_index) = contents[start..].find('(') {
             let schema_start = start + open_paren_index + 1;
             if let Some(close_paren_index) = contents[schema_start..].find(");") {
                 let schema_end = schema_start + close_paren_index;
                 let schema = contents[schema_start..schema_end].trim().to_string();
-                
                 schemas.push(schema);
-                start_index = schema_end + 2; 
-            // Move past ");"
+                start_index = schema_end + 2; // Move past ");"
+            } else if let Some(close_paren_index) = contents[schema_start..].find(')') {
+                let schema_end = schema_start + close_paren_index;
+                let schema = contents[schema_start..schema_end].trim().to_string();
+                schemas.push(schema);
+                start_index = schema_end + 1; // Move past ")"
             } else {
                 break; // Handle potential errors if closing parenthesis isn't found
             }
         } else {
             break; // Handle potential errors if opening parenthesis isn't found
         }
-        start_index = start + 1;
     }
 
     Ok(schemas)
