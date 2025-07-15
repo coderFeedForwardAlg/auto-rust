@@ -16,14 +16,14 @@ use ollama_rs::{coordinator::Coordinator, generation::chat::ChatMessage, Ollama}
 /// # Returns
 ///
 /// Returns a `Result` containing the generated SQL as a string, or an error if the operation fails.
-pub async fn gen_sql(project_dir: std::path::PathBuf, file_name: String) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
+pub async fn gen_sql(project_dir: std::path::PathBuf, file_name: String, sql_task: String) -> Result<String, Box<dyn std::error::Error + Send + Sync>> {
     let model = "llama3.2:latest".to_string();
     
     let ollama = Ollama::default();
     let history = vec![];
     let mut coordinator = Coordinator::new(ollama, model, history);
         
-    let prompt = r#"you are a postgresSQL database designer. Here is how you should write postgres SQL code to define a database. 
+    let prompt = format!(r#"you are a postgresSQL database designer. Here is how you should write postgres SQL code to define a database.
     
     Tables should be defined with CREATE TABLE IF NOT EXISTS. 
     Only use these datatypes: 
@@ -89,10 +89,7 @@ pub async fn gen_sql(project_dir: std::path::PathBuf, file_name: String) -> Resu
 
     
 
-    now make a database to store users and videos they upload. 
-    each user has a name, email, and password. 
-    each video has a title, description, a user, and a path to the video. 
-    each user can have many videos. "#;
+    now {}"#, sql_task);
 
     let user_message = ChatMessage::user(prompt.to_owned());
     let resp = coordinator.chat(vec![user_message]).await?;
