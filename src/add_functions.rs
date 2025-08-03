@@ -83,7 +83,7 @@ pub fn add_insert_func(row: &base_structs::Row, file_path: &std::path::Path) -> 
 
     let cols: String = cols_list.iter().map(|col| format!("{}, ", col).to_string()).collect::<String>()
         .trim_end_matches(", ").to_string();
-        let bind_feilds = cols_list.iter().enumerate().map(|(i, col)| 
+    let bind_feilds = cols_list.iter().enumerate().map(|(i, col)| 
         format!("\t.bind(payload.{})", cols_list[i]))
         //format!("payload.{}, ", cols_list[i]))
         .collect::<Vec<_>>().join("\n");
@@ -91,7 +91,22 @@ pub fn add_insert_func(row: &base_structs::Row, file_path: &std::path::Path) -> 
         .trim_end_matches(", ").to_string();
     let funk = format!(r###"
 
-async fn {funk_name}(
+pub async fn {funk_name}(
+    extract::State(pool): extract::State<PgPool>,
+    Json(payload): Json<{struct_name}>,
+) -> {{
+     // call data func fron data mod 
+     // other logic can also be handeld here 
+    let result = data::data_{funk_name}(extract::State(pool), Json(payload))
+}}
+
+
+
+"###);
+
+
+let data_funk = format!(r###"
+pub async fn data_{funk_name}(
     extract::State(pool): extract::State<PgPool>,
     Json(payload): Json<{struct_name}>,
 ) -> Json<Value> {{
@@ -110,16 +125,27 @@ async fn {funk_name}(
 }}
 "###);
 
+    // let api_path = file_path.parent().unwrap().join("api_layer.rs");
+    let main_file_path = file_path.parent().unwrap().join("/main.rs");
 
     let mut file = OpenOptions::new()
         .write(true) // Enable writing to the file.
         .append(true) // Set the append mode.  Crucially, this makes it append.
         .create(true) // Create the file if it doesn't exist.
-        .open(file_path)?; // Open the file, returning a Result.
+        .open(&main_file_path)?; // Open the file, returning a Result.
+
+    let mut data_file = OpenOptions::new()
+        .write(true) // Enable writing to the file.
+        .append(true) // Set the append mode.  Crucially, this makes it append.
+        .create(true) // Create the file if it doesn't exist.
+        .open(&main_file_path)?; // Open the file, returning a Result.
 
 
 
     file.write_all(funk.as_bytes())?; // comment for testing 
+    data_file.write_all(data_funk.as_bytes())?; // comment for testing 
+
+
 
     Ok(funk_name.to_string())
 }

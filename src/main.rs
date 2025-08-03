@@ -278,11 +278,12 @@ async fn main() -> Result<(), std::io::Error> {
     };
 
     let path = project_dir.join("src/main.rs");
+    let base_path = project_dir.join("src");
     let mut func_names = Vec::new();
     add_top_boilerplate(&path)?;
     
 
-    add_select_funcs(rows, &path, &mut func_names)?;
+    add_select_funcs(rows, &base_path , &mut func_names)?;
 
     // add_object(&path);
     add_axum_end(func_names, &path)?;

@@ -45,7 +45,9 @@ fn generate_struct(row: &Row, file_path: &std::path::Path) -> Result<(), std::io
 
 
 pub fn add_select_funcs(rows: Vec<Row>, path: &std::path::Path, func_names: &mut Vec<String>) -> Result<(), io::Error> {
-    
+
+
+   // re do each one to have layers and return the endpoint layer (api layer)  
     for row in rows {
         generate_struct(&row, &path)?;
         func_names.push(add_functions::add_insert_func(&row, &path)?);
