@@ -1,3 +1,4 @@
+
 mod llm;
 mod schema;
 mod gen_docker;
@@ -11,6 +12,7 @@ mod add_object;
 mod add_minio;
 mod ffmpeg;
 
+use crud_macros::select_all;
 use ffmpeg::gen_ffmpeg;
 use add_minio::add_minio;
 use llm::llm;
@@ -97,7 +99,7 @@ use std::env;
 use std::net::SocketAddr;                                                                                                                                                        
 use std::result::Result;                                                                                                                                                         
 use std::sync::Arc;                                                                                                                                                              
-use axum::http::StatusCode;                                                                                                                                                      
+use axum::http::StatusCode;                  
 use sqlx::types::chrono::Utc; 
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use axum::http::Method;
@@ -179,6 +181,8 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {{
 // docker run --name some-postgres -e POSTGRES_USER=dbuser -e POSTGRES_PASSWORD=p -e POSTGRES_DB=work -p 1111:5432 -d postgres
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
+    // println!("{}", select_all!());
+
     // Get project name from user
     // let llm_res = llm(); // right now this calls functions 
     // print!("{}", llm_res.await.unwrap());
@@ -210,7 +214,7 @@ async fn main() -> Result<(), std::io::Error> {
         .output()?;
 
 
-    // let _ = gen_toml(&project_dir).await;
+    let _ = gen_toml(&project_dir).await;
      
     let _ = gen_ffmpeg(&project_dir, vec!["3 + 4".to_string()]).await;
 
