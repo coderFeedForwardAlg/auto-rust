@@ -83,69 +83,55 @@ pub fn add_insert_func(row: &base_structs::Row, file_path: &std::path::Path) -> 
 
     let cols: String = cols_list.iter().map(|col| format!("{}, ", col).to_string()).collect::<String>()
         .trim_end_matches(", ").to_string();
-    let bind_feilds = cols_list.iter().enumerate().map(|(i, col)| 
-        format!("\t.bind(payload.{})", cols_list[i]))
-        //format!("payload.{}, ", cols_list[i]))
+    let bind_fields = cols_list.iter().enumerate().map(|(i, col)| 
+        format!("\t\t.bind(payload.{})", cols_list[i]))
         .collect::<Vec<_>>().join("\n");
-    let feilds = cols_list.iter().enumerate().map(|(i, col)| format!("${}, ", i + 1)).collect::<String>()
+    let fields = cols_list.iter().enumerate().map(|(i, col)| format!("${}, ", i + 1)).collect::<String>()
         .trim_end_matches(", ").to_string();
-    let funk = format!(r###"
-
+    
+    // API layer function - calls data layer and can add business logic
+    let api_func = format!(r###"
 pub async fn {funk_name}(
     extract::State(pool): extract::State<PgPool>,
     Json(payload): Json<{struct_name}>,
-) -> {{
-     // call data func fron data mod 
-     // other logic can also be handeld here 
-    let result = data::data_{funk_name}(extract::State(pool), Json(payload))
+) -> Json<Value> {{
+    // Call data function from data module 
+    // Other business logic can also be handled here 
+    let result = data_{funk_name}(extract::State(pool), Json(payload)).await;
+    result
 }}
-
-
-
 "###);
 
-
-let data_funk = format!(r###"
+    // Data layer function - handles database operations
+    let data_func = format!(r###"
 pub async fn data_{funk_name}(
     extract::State(pool): extract::State<PgPool>,
     Json(payload): Json<{struct_name}>,
 ) -> Json<Value> {{
-    let query = "INSERT INTO {table_name} ({cols}) VALUES ({feilds}) RETURNING *";
+    let query = "INSERT INTO {table_name} ({cols}) VALUES ({fields}) RETURNING *";
     
     let q = sqlx::query_as::<_, {struct_name}>(&query)
-        {bind_feilds};
+{bind_fields};
     
     let result = q.fetch_one(&pool).await;
 
     match result {{
-        Ok(value) => Json(json!({{"res": "sucsess" }})), // maybe bad code??
+        Ok(value) => Json(json!({{"res": "success", "data": value}})),
         Err(e) => Json(json!({{"res": format!("error: {{}}", e)}}))
-
     }}
 }}
 "###);
 
-    // let api_path = file_path.parent().unwrap().join("api_layer.rs");
-    let main_file_path = file_path.parent().unwrap().join("/main.rs");
-
+    // Write both functions to the same file
     let mut file = OpenOptions::new()
-        .write(true) // Enable writing to the file.
-        .append(true) // Set the append mode.  Crucially, this makes it append.
-        .create(true) // Create the file if it doesn't exist.
-        .open(&main_file_path)?; // Open the file, returning a Result.
+        .write(true)
+        .append(true)
+        .create(true)
+        .open(file_path)?;
 
-    let mut data_file = OpenOptions::new()
-        .write(true) // Enable writing to the file.
-        .append(true) // Set the append mode.  Crucially, this makes it append.
-        .create(true) // Create the file if it doesn't exist.
-        .open(&main_file_path)?; // Open the file, returning a Result.
-
-
-
-    file.write_all(funk.as_bytes())?; // comment for testing 
-    data_file.write_all(data_funk.as_bytes())?; // comment for testing 
-
-
+    // Write API function first, then data function
+    file.write_all(api_func.as_bytes())?;
+    file.write_all(data_func.as_bytes())?;
 
     Ok(funk_name.to_string())
 }
