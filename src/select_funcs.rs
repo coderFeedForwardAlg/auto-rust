@@ -13,7 +13,7 @@ fn generate_struct(row: &Row, file_path: &std::path::Path) -> Result<(), std::io
     
     let type_map = create_type_map();
     let struct_name = row.name.to_case(Case::Pascal); // Convert table name to PascalCase
-    let mut struct_string = format!("#[derive(Debug, Deserialize, FromRow)]\nstruct {} {{\n", struct_name);
+    let mut struct_string = format!("#[derive(Debug, Serialize, Deserialize, FromRow)]\nstruct {} {{\n", struct_name);
 
     for col in &row.cols {
         let field_name = col.name.clone();
