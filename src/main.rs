@@ -6,16 +6,13 @@ mod gen_sql;
 mod gen_toml;
 mod add_functions;
 mod base_structs;
-mod select_funcs;
+mod sql_funcs;
 mod add_compose;
 mod add_object;
 mod add_minio;
-mod ffmpeg;
+mod boilerplate;
 
-use crud_macros::select_all;
-use ffmpeg::gen_ffmpeg;
 use add_minio::add_minio;
-use llm::llm;
 use add_object::add_object;
 use add_compose::add_compose;
 use gen_sql::gen_sql;
@@ -31,11 +28,10 @@ use std::io::Write;
 pub use schema::{extract_column_info, extract_table_schemas, extract_table_names, Col};
 use std::process::{Command, Output};
 use gen_docker::gen_docker;
-use crate::add_functions::add_get_one_func;
-use crate::gen_toml::gen_toml;
-use add_functions::add_get_all_func;
+use boilerplate::{add_axum_end, add_top_boilerplate};
 pub use base_structs::{Row, create_type_map};
-pub use select_funcs::add_select_funcs;
+pub use sql_funcs::add_basic_sql_funcs;
+
 // This function is now in base_structs.rs
 fn create_rows_from_sql(file_path: &std::path::Path) -> Result<Vec<Row>, io::Error> {
     let table_names = extract_table_names(&file_path.display().to_string())?;
@@ -69,132 +65,18 @@ fn create_rows_from_sql(file_path: &std::path::Path) -> Result<Vec<Row>, io::Err
 }
 
 
-fn add_top_boilerplate(file_path: &std::path::Path) -> Result<(), io::Error> {
-    // Ensure parent directories exist
-    if let Some(parent) = file_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    
-    let mut file = OpenOptions::new()
-        .write(true) // Enable writing to the file.
-        .create(true) // Create the file if it doesn't exist.
-        .truncate(true) // Clear the file if it exists
-        .open(file_path)
-        .map_err(|e| {
-            eprintln!("Error opening file {}: {}", file_path.display(), e);
-            e
-        })?;
-    let top_boiler = r###"
-use axum::{                                                                                                                                                                      
-    extract::{self, Path, Query},  
-    routing::{get, post},                                                                                                                                                        
-    Json, Router,                        
-};       
-use minio_rsc::{Minio, provider::StaticProvider, client::PresignedArgs};
-use serde::{Deserialize, Serialize};                                                                                                                                                          
-use serde_json::{json, Value};                                                                                                                                                   
-use sqlx::PgPool;                                                                                                                                                                
-use sqlx::{postgres::PgPoolOptions, prelude::FromRow};                                                                                                                           
-use std::env;                                                                                                                                                                    
-use std::net::SocketAddr;                                                                                                                                                        
-use std::result::Result;                                                                                                                                                         
-use std::sync::Arc;                                                                                                                                                              
-use axum::http::StatusCode;                  
-use sqlx::types::chrono::Utc; 
-use tower_http::cors::{AllowOrigin, CorsLayer};
-use axum::http::Method;
-
-"###;
-    file.write_all(top_boiler.as_bytes())?; // comment for testing 
-
-    Ok(())
-} 
-
-fn add_axum_end(funcs: Vec<String>, file_path: &std::path::Path) -> Result<(), io::Error> {
-    // Ensure parent directories exist
-    if let Some(parent) = file_path.parent() {
-        std::fs::create_dir_all(parent)?;
-    }
-    
-    let mut file = OpenOptions::new()
-        .write(true) // Enable writing to the file.
-        .create(true) // Create the file if it doesn't exist.
-        .append(true) // Set the append mode.
-        .open(file_path)
-        .map_err(|e| {
-            eprintln!("Error opening file {}: {}", file_path.display(), e);
-            e
-        })?;
-    let mut routs: String = funcs.iter().map(|func| {
-        let http_method = if func.starts_with("get") { "get" } else { "post" };
-        format!("\t.route(\"/{func}\", {http_method}({func}))\n").to_string()
-    }).collect::<String>();
-    routs.push_str("\t.route(\"/signed-urls/:video_path\", get(get_signed_url))\n");
-    let ending = format!(r###"
-async fn health() -> String {{"healthy".to_string() }}
-
-#[tokio::main]
-async fn main() -> Result<(), Box<dyn std::error::Error>> {{
-    let db_url = env::var("DATABASE_URL")
-     .unwrap_or_else(|_| "postgres://dbuser:p@localhost:1111/data".to_string());
-    let pool = PgPoolOptions::new()
-        .max_connections(100)
-        .connect(&db_url)
-        .await?;
-
-    let migrate = sqlx::migrate!("./migrations").run(&pool).await;
-
-    match migrate {{
-        Ok(_) => println!("Migrations applied successfully."),
-        Err(e) => eprintln!("Error applying migrations: {{}}", e),
-    }};
-
-    let app = Router::new()
-    .route("/health", get(health))
-    {routs}
-    .layer(
-        CorsLayer::new()
-            .allow_origin(AllowOrigin::list(vec![
-                "http://localhost:3000".parse().unwrap(),
-                "https://example.com".parse().unwrap(),
-            ]))
-            .allow_methods([Method::GET, Method::POST])
-            .allow_headers(tower_http::cors::Any)
-    )
-        .with_state(pool);
-
-    let listener = tokio::net::TcpListener::bind("0.0.0.0:8081").await.unwrap();
-
-    axum::serve(listener, app).await.unwrap();
-    Ok(())
-}}
-
-
-"###);  //https://tidelabs.github.io/tidechain/tower_http/cors/struct.CorsLayer.html (may help with auth) 
-    
-    file.write_all(ending.as_bytes())?; // comment for testing 
-    Ok(())
-}
-
 // todo: kick off postgress 
 // https://users.rust-lang.org/t/how-to-execute-a-root-command-on-linux/50066/7
 // docker run --name some-postgres -e POSTGRES_USER=dbuser -e POSTGRES_PASSWORD=p -e POSTGRES_DB=work -p 1111:5432 -d postgres
 #[tokio::main]
 async fn main() -> Result<(), std::io::Error> {
-    // println!("{}", select_all!());
-
-    // Get project name from user
-    // let llm_res = llm(); // right now this calls functions 
-    // print!("{}", llm_res.await.unwrap());
     let mut file_name = String::new();
     println!("Enter project name: ");
     io::stdin().read_line(&mut file_name)?;
     let file_name = file_name.trim().to_string();
     
-    // Save current directory
     let current_dir = std::env::current_dir()?;
     
-    // Get the parent directory path
     let parent_dir = std::env::current_dir()?.parent()
         .ok_or_else(|| std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -213,22 +95,23 @@ async fn main() -> Result<(), std::io::Error> {
         .arg(&file_name)
         .output()?;
 
-
-    let _ = gen_toml(&project_dir).await;
-     
-    let _ = gen_ffmpeg(&project_dir, vec!["3 + 4".to_string()]).await;
-
-    
+ 
     if !output.status.success() {
+        eprintln!("Failed to create new project: {}", String::from_utf8_lossy(&output.stderr));
         return Err(std::io::Error::new(
             std::io::ErrorKind::Other,
             format!("Failed to create new project: {}", String::from_utf8_lossy(&output.stderr))
         ));
     }
 
-    
+
+    let gen_toml_res = gen_toml::gen_toml(&project_dir).await;
+    match gen_toml_res {
+        Ok(_) => println!("Successfully generated TOML"),
+        Err(e) => eprintln!("Failed to generate TOML: {}", e),
+    };
+           
     // Generate SQL and create necessary files
-    println!("Generating SQL...");
     let mut sql_task = String::new();
     println!("Enter the specific task for the SQL database (e.g., 'make SQL to store users and their favored food'): ");
     io::stdin().read_line(&mut sql_task)?;
@@ -282,8 +165,10 @@ async fn main() -> Result<(), std::io::Error> {
     add_top_boilerplate(&path)?;
     
 
-    add_select_funcs(rows, &path , &mut func_names)?;
+    // TODO: rename, this creates select all, select one, and add functions. 
+    add_basic_sql_funcs(rows, &path , &mut func_names)?;
 
+    // TODO: this looks like a dublicat of the add_minio function 
     // add_object(&path);
     add_axum_end(func_names, &path)?;
     let docker_res = gen_docker(project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
@@ -356,6 +241,13 @@ mod tests {
     }
 }
 
+// need to: 
+// re-facter 
+// minio for more than just text 
+// use sql-gen crate 
+
+
+
 // CICD plan 
 // make a docker file that exposese port
 // make docker compose yaml to start postgres (and volume), and rust (and exposse to internet)
@@ -381,5 +273,12 @@ mod tests {
 
 
 // add function to call ollama/apis  (can probably use comsom url in ollama_rs to hit open router endpoints) 
+// * maybe do langchain in another container that cals rust?
+//  could be slow thought if using network between containers
+// * or have langchain run in a proces kicked off my rust. 
+//  actor based model to comunicate between procesis 
+
+
+
 
 // call python code that writen in a python file (just in case)
