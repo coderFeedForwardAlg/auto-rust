@@ -25,9 +25,21 @@ pub fn add_get_all_func(row: &base_structs::Row, file_path: &std::path::Path) ->
         .trim_end_matches(", \n")
         .to_string();
     
-    let funk_str = format!(r###"
+    // API layer function - calls data layer and can add business logic
+    let api_func = format!(r###"
+pub async fn {func_name}(
+    extract::State(pool): extract::State<PgPool>,
+) -> Result<Json<Value>, (StatusCode, String)> {{
+    // Call data function from data module 
+    // Other business logic can also be handled here 
+    let result = data_{func_name}(extract::State(pool)).await;
+    result
+}}
+"###);
 
-async fn {func_name}(
+    // Data layer function - handles database operations
+    let data_func = format!(r###"
+pub async fn data_{func_name}(
     extract::State(pool): extract::State<PgPool>,
 ) -> Result<Json<Value>, (StatusCode, String)> {{
     let query = "SELECT * FROM {row_name}";
@@ -47,19 +59,16 @@ async fn {func_name}(
 }}
 "###);
 
-    // Open file with proper error handling
-    let file = OpenOptions::new()
+    // Write both functions to the same file
+    let mut file = OpenOptions::new()
         .write(true)
-        .create(true)
         .append(true)
-        .open(file_path)
-        .map_err(|e| {
-            eprintln!("Error opening file {}: {}", file_path.display(), e);
-            e
-        })?;
-        
-    let mut file = BufWriter::new(file);
-    file.write_all(funk_str.as_bytes())?;
+        .create(true)
+        .open(file_path)?;
+
+    // Write API function first, then data function
+    file.write_all(api_func.as_bytes())?;
+    file.write_all(data_func.as_bytes())?;
 
     Ok(func_name.to_string())
 }
@@ -157,20 +166,36 @@ pub fn add_get_one_func(row: &base_structs::Row, col: &schema::Col, file_path: &
         col.name, col.name)
         .to_string()).collect::<String>()
         .trim_end_matches(", ").to_string();
-    // let val = val.unwrap();
-    // use match not res_json var
-    let funk_str = format!(r###"
+
+    // Query struct definition
+    let query_struct = format!(r###"
 #[derive(Debug, Deserialize)]
 struct {row_name}{col_name}Query {{
     {col_name}: {col_type},
 }}
+"###);
 
-async fn {func_name}(
+    // API layer function - calls data layer and can add business logic
+    let api_func = format!(r###"
+pub async fn {func_name}(
     extract::State(pool): extract::State<PgPool>,
-    match_val: Query<{row_name}{col_name}Query>, // Assuming col is a path parameter
+    match_val: Query<{row_name}{col_name}Query>,
+) -> Result<Json<Value>, (StatusCode, String)> {{
+    // Call data function from data module 
+    // Other business logic can also be handled here 
+    let result = data_{func_name}(extract::State(pool), match_val).await;
+    result
+}}
+"###);
+
+    // Data layer function - handles database operations
+    let data_func = format!(r###"
+pub async fn data_{func_name}(
+    extract::State(pool): extract::State<PgPool>,
+    match_val: Query<{row_name}{col_name}Query>,
 ) -> Result<Json<Value>, (StatusCode, String)> {{
     let query = format!("SELECT * FROM {row_name} WHERE {col_name} = $1");
-    let q = sqlx::query_as::<_, {struct_name}>(&query).bind(match_val.{col_name}.clone()); // todo: fugure out when .conle is needed
+    let q = sqlx::query_as::<_, {struct_name}>(&query).bind(match_val.{col_name}.clone());
 
     let elemint = q.fetch_optional(&pool).await.map_err(|e| {{
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Database err{{}}", e))
@@ -187,14 +212,17 @@ async fn {func_name}(
 }}
 "###);
 
+    // Write all parts to the same file
     let mut file = OpenOptions::new()
-        .write(true) // Enable writing to the file.
-        .append(true) // Set the append mode.  Crucially, this makes it append.
-        .create(true) // Create the file if it doesn't exist.
-        .open(file_path)?; // Open the file, returning a Result.
+        .write(true)
+        .append(true)
+        .create(true)
+        .open(file_path)?;
 
-    file.write_all(funk_str.as_bytes())?; // comment for testing 
-
+    // Write query struct, API function, then data function
+    file.write_all(query_struct.as_bytes())?;
+    file.write_all(api_func.as_bytes())?;
+    file.write_all(data_func.as_bytes())?;
 
     Ok(func_name.to_string())
 }
