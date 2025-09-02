@@ -55,7 +55,8 @@ pub fn add_basic_sql_funcs(
     for row in rows {
         generate_struct(&row, &path)?;
         func_names.push(add_functions::add_insert_func(&row, &path)?);
-        func_names.push(add_functions::add_get_all_func(&row, &path, Some(&row.cols[0]))?);
+        // chould api caller pass optional param to set order by?
+        func_names.push(add_functions::add_get_all_func(&row, &path)?);
         for col in &row.cols {
             func_names.push(add_functions::add_get_one_func(&row, col, &path)?);
         }

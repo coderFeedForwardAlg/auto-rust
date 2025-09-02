@@ -9,10 +9,11 @@ use convert_case::{Case, Casing};
 use crate::base_structs;
 use crate::create_type_map;
 use crate::schema;
+
+
 pub fn add_get_all_func(
     row: &base_structs::Row,
     file_path: &std::path::Path,
-    order_by: Option<&Col>
 ) -> Result<String, io::Error> {
     // Ensure parent directories exist
     if let Some(parent) = file_path.parent() {
@@ -23,7 +24,6 @@ pub fn add_get_all_func(
     let func_name = format!("get_{}", row.name.clone());
     let struct_name = row.name.clone().to_case(Case::Pascal);
 
-    let order_by_clause = order_by.map(|col| format!("ORDER BY {}", col.name)).unwrap_or("".to_string());
     // Generate the JSON fields for the response
     let cols: String = row.cols.iter()
         .map(|col| format!("\t\"{}\": elemint.{}, \n", col.name, col.name))
@@ -33,23 +33,40 @@ pub fn add_get_all_func(
     
     // API layer function - calls data layer and can add business logic
     let api_func = format!(r###"
+
+#[derive(Deserialize)]
+struct {row_name}QueryParams {{
+    order_by: Option<String>,
+    direction: Option<String>, // "asc" or "desc"
+}}
+
+
 pub async fn {func_name}(
     extract::State(pool): extract::State<PgPool>,
+    Query(query_params): Query<{row_name}QueryParams>,
 ) -> Result<Json<Value>, (StatusCode, String)> {{
     // Call data function from data module 
     // Other business logic can also be handled here 
-    let result = data_{func_name}(extract::State(pool)).await;
+    let result = data_{func_name}(extract::State(pool), axum::extract::Query(query_params)).await;
     result
 }}
 "###);
-
+// owned_str.push_str(borrows_str)
     // Data layer function - handles database operations
     let data_func = format!(r###"
+
+
 pub async fn data_{func_name}(
     extract::State(pool): extract::State<PgPool>,
+    query_params: axum::extract::Query<{row_name}QueryParams>,
 ) -> Result<Json<Value>, (StatusCode, String)> {{
-    let query = "SELECT * FROM {row_name} {order_by_clause}";
-    let q = sqlx::query_as::<_, {struct_name}>(query);
+    let mut query = "SELECT * FROM {row_name}".to_owned();
+    if let Some(order_by) = query_params.order_by {{
+        let order_by = format!("ORDER BY {{}}", order_by);
+        query.push_str(&order_by);
+}}
+
+    let q = sqlx::query_as::<_, {struct_name}>(&query);
 
     let elemints: Vec<{struct_name}> = q.fetch_all(&pool).await.map_err(|e| {{
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {{}}", e))
