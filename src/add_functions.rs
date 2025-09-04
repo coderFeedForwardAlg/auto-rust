@@ -61,10 +61,22 @@ pub async fn data_{func_name}(
     query_params: axum::extract::Query<{row_name}QueryParams>,
 ) -> Result<Json<Value>, (StatusCode, String)> {{
     let mut query = "SELECT * FROM {row_name}".to_owned();
+    // Validate and apply ordering if provided
     if let Some(order_by) = &query_params.order_by {{
-        let order_by = format!("ORDER BY {{}}", order_by);
-        query.push_str(&order_by);
-}}
+        // Validate order_by column name to prevent SQL injection
+        // Only allow alphanumeric characters and underscores
+        if order_by.chars().all(|c| c.is_alphanumeric() || c == '_') {{
+            // Validate direction parameter
+            let direction = match &query_params.direction {{
+                Some(dir) if dir.to_lowercase() == "desc" => "DESC",
+                _ => "ASC",
+            }};
+            
+            query.push_str(&format!(" ORDER BY {{}} {{}}", order_by, direction));
+        }} else {{
+            return Err((StatusCode::BAD_REQUEST, "Invalid order_by parameter".to_string()));
+        }}
+    }}
 
     let q = sqlx::query_as::<_, {struct_name}>(&query);
 
