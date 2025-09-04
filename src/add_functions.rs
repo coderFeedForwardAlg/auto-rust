@@ -61,7 +61,7 @@ pub async fn data_{func_name}(
     query_params: axum::extract::Query<{row_name}QueryParams>,
 ) -> Result<Json<Value>, (StatusCode, String)> {{
     let mut query = "SELECT * FROM {row_name}".to_owned();
-    if let Some(order_by) = query_params.order_by {{
+    if let Some(order_by) = &query_params.order_by {{
         let order_by = format!("ORDER BY {{}}", order_by);
         query.push_str(&order_by);
 }}
