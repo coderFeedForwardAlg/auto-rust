@@ -33,6 +33,7 @@ use std::result::Result;
 use std::sync::Arc;                                                                                                                                                              
 use axum::http::StatusCode;                  
 use sqlx::types::chrono::Utc; 
+use std::collections::HashMap;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use axum::http::Method;
 
@@ -47,6 +48,17 @@ pub fn add_axum_end(funcs: Vec<String>, file_path: &std::path::Path) -> Result<(
     if let Some(parent) = file_path.parent() {
         std::fs::create_dir_all(parent)?;
     }
+    
+    // Create tests directory structure
+    let project_root = file_path.parent().unwrap().parent().unwrap();
+    crate::add_tests::create_test_directory_structure(project_root)?;
+    crate::add_tests::add_test_dependencies_to_cargo_toml(project_root)?;
+    
+    // TODO: Pass table names to generate database-specific test utilities
+    // crate::add_tests::generate_database_test_utilities(project_root, &table_names)?;
+    // crate::add_tests::generate_crud_tests(project_root, &table_names)?;
+    // crate::add_tests::generate_query_param_tests(project_root, &table_names)?;
+    // crate::add_tests::generate_error_handling_tests(project_root, &table_names)?;
     
     let mut file = OpenOptions::new()
         .write(true) // Enable writing to the file.
