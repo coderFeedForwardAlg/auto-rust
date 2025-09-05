@@ -5,6 +5,7 @@ mod gen_docker;
 mod gen_sql;
 mod gen_toml;
 mod add_functions;
+mod add_tests;
 mod base_structs;
 mod sql_funcs;
 mod add_compose;
@@ -189,57 +190,6 @@ async fn main() -> Result<(), std::io::Error> {
     Ok(())
 }
 
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use std::io::{self, Write};
-    use std::fs;
-    use tempfile;
-
-    #[test]
-    fn test_extract_table_schemas() -> Result<(), io::Error> {
-        let sql_content = r#"
-        CREATE TABLE public."user" (
-            id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-            favorite_color VARCHAR(50),
-            height NUMERIC,
-            age INTEGER,
-            job VARCHAR(100)
-        );
-
-        CREATE TABLE product_details (
-            product_id INTEGER PRIMARY KEY,
-            description TEXT,
-            price DECIMAL(10, 2)
-        );
-
-
-        create table order_items (
-            order_id INTEGER,
-            item_id INTEGER,
-            quantity INTEGER
-        );
-        "#;
-        let mut temp_file = tempfile::NamedTempFile::new()?;
-        write!(temp_file, "{}", sql_content)?;
-        temp_file.flush()?;
-
-        let expected_schemas = vec![
-            "id UUID PRIMARY KEY DEFAULT gen_random_uuid(),\n            favorite_color VARCHAR(50),\n            height NUMERIC,\n            age INTEGER,\n            job VARCHAR(100)",
-            "product_id INTEGER PRIMARY KEY,\n            description TEXT,\n            price DECIMAL(10, 2)",
-            "order_id INTEGER,\n            item_id INTEGER,\n            quantity INTEGER",
-        ];
-
-        let schemas = extract_table_schemas(temp_file.path().to_str().unwrap())?;
-        assert_eq!(schemas.len(), expected_schemas.len());
-        for (i, schema) in schemas.iter().enumerate() {
-            assert_eq!(schema.trim(), expected_schemas[i].trim());
-        }
-
-        Ok(())
-    }
-}
 
 // need to: 
 // re-facter 
