@@ -116,7 +116,11 @@ async fn main() -> Result<(), std::io::Error> {
     let mut sql_task = String::new();
     println!("Enter the specific task for the SQL database (e.g., 'make SQL to store users and their favored food'): ");
     io::stdin().read_line(&mut sql_task)?;
-    let sql_task = sql_task.trim().to_string();
+    let mut sql_task = sql_task.trim().to_string();
+    if sql_task == "" {
+        sql_task = "make a database to track infomation about hosts and renters for an airBnB like aplication. there are hosts that have a zip code, name, email, and password hash. there are also renters that have all the same colums expet the zip code.".to_string();
+        println!("using default test string");
+    }
 
     match gen_sql::gen_sql(project_dir.clone(), file_name.clone(), sql_task).await {
         Ok(content) => {

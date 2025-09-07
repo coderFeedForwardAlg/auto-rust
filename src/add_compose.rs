@@ -15,8 +15,8 @@ services:
       POSTGRES_USER: dbuser
       POSTGRES_PASSWORD: p
       POSTGRES_DB: data
-    ports:
-      - \"1111:5432\"
+    # ports:
+      # - \"1111:5432\"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -31,9 +31,9 @@ services:
     environment:
       MINIO_ROOT_USER: minioadmin
       MINIO_ROOT_PASSWORD: minioadmin
-    ports:
-      - \"9000:9000\"  # API port
-      - \"9001:9001\"  # Console port
+    # ports:
+      # - \"9000:9000\"  # API port
+      # - \"9001:9001\"  # Console port
     volumes:
       - minio_data:/data
     healthcheck:
@@ -71,7 +71,7 @@ services:
         condition: service_healthy
     restart: on-failure
     healthcheck:
-      test: [\"CMD\", \"wget\", \"--spider\", \"http://localhost:8082/health\"]
+      test: [\"CMD\", \"wget\", \"--spider\", \"http://localhost:8081/health\"]
       interval: 10s
       timeout: 5s
       retries: 5
