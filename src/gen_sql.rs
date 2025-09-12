@@ -1,5 +1,4 @@
-
-use std::{fs::{self, File}, io::Write};
+use std::{fs::{self, File}, io::Write, process::Command};
 
 use ollama_rs::{coordinator::Coordinator, generation::chat::ChatMessage, Ollama};
 
@@ -91,9 +90,34 @@ pub async fn gen_sql(project_dir: std::path::PathBuf, file_name: String, sql_tas
 
     now {}"#, sql_task);
 
-    let user_message = ChatMessage::user(prompt.to_owned());
-    let resp = coordinator.chat(vec![user_message]).await?;
+    // test python process 
+    let output = Command::new("./.venv/bin/python3")
+        .arg("llm.py")
+        .arg(prompt.clone())
+        .output()
+        .expect("Failed to execute Python command");
+
+    // Check if Python script executed successfully
+    if !output.status.success() {
+        let error_msg = String::from_utf8_lossy(&output.stderr);
+        eprintln!("Python script failed with error: {}", error_msg);
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::Other,
+            format!("Python script execution failed: {}", error_msg)
+        )));
+    }
+
+    let sql = String::from_utf8_lossy(&output.stdout).trim().to_string();
     
+    if sql.is_empty() {
+        return Err(Box::new(std::io::Error::new(
+            std::io::ErrorKind::InvalidData,
+            "Python script returned empty SQL"
+        )));
+    }
+
+    println!("Generated SQL: {}", sql);
+
     let migrations_dir = project_dir.join("migrations");
     let sql_path = migrations_dir.join("0001_data.sql");
     
@@ -113,11 +137,9 @@ pub async fn gen_sql(project_dir: std::path::PathBuf, file_name: String, sql_tas
         e
     })?;
 
-    let content = resp.message.content.to_string();
-    println!("Writing SQL content ({} bytes)", content.len());
-    file.write_all(content.as_bytes()).map_err(|e| {
+    file.write_all(sql.as_bytes()).map_err(|e| {
         eprintln!("Error writing to file: {}", e);
         e
     })?;
-    Ok(resp.message.content.to_string())
+    Ok("success".to_string())
 }

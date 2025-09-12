@@ -32,6 +32,8 @@ use gen_docker::gen_docker;
 use boilerplate::{add_axum_end, add_top_boilerplate};
 pub use base_structs::{Row, create_type_map};
 pub use sql_funcs::add_basic_sql_funcs;
+use std::net::{TcpListener, SocketAddr};
+
 
 // This function is now in base_structs.rs
 fn create_rows_from_sql(file_path: &std::path::Path) -> Result<Vec<Row>, io::Error> {
@@ -190,6 +192,43 @@ async fn main() -> Result<(), std::io::Error> {
     match minio {
         Ok(_) => println!("Minio added at {}", project_dir.to_str().unwrap().to_owned()),
         Err(e) => eprintln!("Error adding Minio: {}", e),
+    }
+
+    let addr: SocketAddr = "0.0.0.0:8081".parse().unwrap();
+    match TcpListener::bind(&addr) {
+        // If the bind operation is successful, it means the port was available.
+        Ok(listener) => {
+            println!("✅ Port 8081 is NOT in use.");
+            // It's important to explicitly drop the listener to free up the port immediately.
+            // This allows the program to exit cleanly.
+            drop(listener);
+        }
+        // If the bind operation fails, an error is returned.
+        // We can inspect the error kind to determine if the port is already in use.
+        Err(e) => {
+            // A common error is `AddrInUse`, which indicates the port is already taken.
+            if e.kind() == std::io::ErrorKind::AddrInUse {
+                println!("❌ Port 8081 is already in uses!!!!!!!!!!!!!!");
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+            } else {
+                // Handle other potential errors, such as permissions issues.
+                eprintln!("An unexpected error occurred: {}", e);
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+                println!("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!");
+
+
+            }
+        }
     }
     Ok(())
 }

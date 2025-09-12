@@ -1,2 +1,5 @@
 /target
 /videos
+
+.venv
+.env
