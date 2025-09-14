@@ -1,5 +1,52 @@
-/target
-/videos
+# Rust-specific files
+target/
+**/target/
+Cargo.lock
+**/Cargo.lock
+*.rs.bk
 
-.venv
-.env
+# Dependencies
+/node_modules
+/.pnp
+.pnp.js
+**/node_modules
+
+# Testing
+/coverage
+
+# Production
+/build
+
+# Misc
+.DS_Store
+.env.local
+.env.development.local
+.env.test.local
+.env.production.local
+
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Python-specific files
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+.env/
+.venv/
+env/
+venv/
+ENV/
+.env.bak
+.pytest_cache/
+.coverage
+.pytest_cache/
+.mypy_cache/
+
+# Local development files
+*.swp
+*.swo
+*~
+

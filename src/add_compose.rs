@@ -77,6 +77,16 @@ services:
       retries: 5
       start_period: 30s
 
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - \"80:80\" 
+    depends_on:
+      - app
+    restart: on-failure
+
 volumes:
   postgres_data:
   minio_data:
