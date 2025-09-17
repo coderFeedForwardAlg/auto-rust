@@ -50,6 +50,9 @@ fastapi-template/.env
 fastapi-template/.venv/
 fastapi-template/__pycache__/
 
+# Environment variables
+.env
+
 # Local development files
 *.swp
 *.swo
