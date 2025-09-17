@@ -45,8 +45,12 @@ ENV/
 .pytest_cache/
 .mypy_cache/
 
+# FastAPI template specific
+fastapi-template/.env
+fastapi-template/.venv/
+fastapi-template/__pycache__/
+
 # Local development files
 *.swp
 *.swo
 *~
-
