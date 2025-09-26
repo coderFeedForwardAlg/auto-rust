@@ -33,7 +33,7 @@ RUN rustup default nightly
 
 # Copy the actual source tree and build the real binary
 COPY . .
-RUN cargo build --release
+RUN cargo build -j 6 --release
 
 # -----------------------------------------------------------------------------
 # 2. Runtime image: copy the binary into a minimal base image

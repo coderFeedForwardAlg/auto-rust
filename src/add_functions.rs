@@ -2,13 +2,20 @@ use std::fs::OpenOptions;
 use std::io;
 use std::io::BufWriter;
 use std::io::Write;
+use std::collections::HashMap;
 
 
+use crate::schema::Col;
 use convert_case::{Case, Casing};
 use crate::base_structs;
 use crate::create_type_map;
 use crate::schema;
-pub fn add_get_all_func(row: &base_structs::Row, file_path: &std::path::Path) -> Result<String, io::Error> {
+
+
+pub fn add_get_all_func(
+    row: &base_structs::Row,
+    file_path: &std::path::Path,
+) -> Result<String, io::Error> {
     // Ensure parent directories exist
     if let Some(parent) = file_path.parent() {
         std::fs::create_dir_all(parent)?;
@@ -17,7 +24,7 @@ pub fn add_get_all_func(row: &base_structs::Row, file_path: &std::path::Path) ->
     let row_name = row.name.clone();
     let func_name = format!("get_{}", row.name.clone());
     let struct_name = row.name.clone().to_case(Case::Pascal);
-    
+
     // Generate the JSON fields for the response
     let cols: String = row.cols.iter()
         .map(|col| format!("\t\"{}\": elemint.{}, \n", col.name, col.name))
@@ -25,15 +32,90 @@ pub fn add_get_all_func(row: &base_structs::Row, file_path: &std::path::Path) ->
         .trim_end_matches(", \n")
         .to_string();
     
-    let funk_str = format!(r###"
+    // API layer function - calls data layer and can add business logic
+    let api_func = format!(r###"
 
-async fn {func_name}(
+#[derive(Deserialize)]
+struct {row_name}QueryParams {{
+    order_by: Option<String>,
+    direction: Option<String>, // "asc" or "desc"
+    #[serde(flatten)]
+    filters: HashMap<String, String>,
+}}
+
+
+pub async fn {func_name}(
     extract::State(pool): extract::State<PgPool>,
+    Query(query_params): Query<{row_name}QueryParams>,
 ) -> Result<Json<Value>, (StatusCode, String)> {{
-    let query = "SELECT * FROM {row_name}";
-    let q = sqlx::query_as::<_, {struct_name}>(query);
+    // Call data function from data module 
+    // Other business logic can also be handled here 
+    let result = data_{func_name}(extract::State(pool), axum::extract::Query(query_params)).await;
+    result
+}}
+"###);
+// owned_str.push_str(borrows_str)
+    // Data layer function - handles database operations
+    let data_func = format!(r###"
 
-    let elemints: Vec<{struct_name}> = q.fetch_all(&pool).await.map_err(|e| {{
+
+pub async fn data_{func_name}(
+    extract::State(pool): extract::State<PgPool>,
+    query_params: axum::extract::Query<{row_name}QueryParams>,
+) -> Result<Json<Value>, (StatusCode, String)> {{
+    let mut query = "SELECT * FROM {row_name}".to_owned();
+    let mut sql_params: Vec<String> = Vec::new();
+    let mut param_index = 1;
+    
+    // Handle filters
+    if !query_params.filters.is_empty() {{
+        let mut where_conditions: Vec<String> = Vec::new();
+        
+        for (field, value) in &query_params.filters {{
+            // Skip ordering parameters
+            if field == "order_by" || field == "direction" {{
+                continue;
+            }}
+            
+            // Validate field name to prevent SQL injection
+            if field.chars().all(|c| c.is_alphanumeric() || c == '_') {{
+                where_conditions.push(format!("{{}} = ${{}}", field, param_index));
+                sql_params.push(value.clone());
+                param_index += 1;
+            }} else {{
+                return Err((StatusCode::BAD_REQUEST, format!("Invalid field name: {{}}", field)));
+            }}
+        }}
+        
+        if !where_conditions.is_empty() {{
+            query.push_str(&(" WHERE ".to_owned() + &where_conditions.join(" AND ")));
+        }}
+    }}
+    
+    // Validate and apply ordering if provided
+    if let Some(order_by) = &query_params.order_by {{
+        // Validate order_by column name to prevent SQL injection
+        // Only allow alphanumeric characters and underscores
+        if order_by.chars().all(|c| c.is_alphanumeric() || c == '_') {{
+            // Validate direction parameter
+            let direction = match &query_params.direction {{
+                Some(dir) if dir.to_lowercase() == "desc" => "DESC",
+                _ => "ASC",
+            }};
+            
+            query.push_str(&format!(" ORDER BY {{}} {{}}", *order_by, direction));
+        }} else {{
+            return Err((StatusCode::BAD_REQUEST, "Invalid order_by parameter".to_string()));
+        }}
+    }}
+
+    // Execute query with parameters
+    let mut query_builder = sqlx::query_as::<_, {struct_name}>(&query);
+    for param in &sql_params {{
+        query_builder = query_builder.bind(param);
+    }}
+
+    let elemints: Vec<{struct_name}> = query_builder.fetch_all(&pool).await.map_err(|e| {{
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Database error: {{}}", e))
     }})?;
 
@@ -47,23 +129,19 @@ async fn {func_name}(
 }}
 "###);
 
-    // Open file with proper error handling
-    let file = OpenOptions::new()
+    // Write both functions to the same file
+    let mut file = OpenOptions::new()
         .write(true)
-        .create(true)
         .append(true)
-        .open(file_path)
-        .map_err(|e| {
-            eprintln!("Error opening file {}: {}", file_path.display(), e);
-            e
-        })?;
-        
-    let mut file = BufWriter::new(file);
-    file.write_all(funk_str.as_bytes())?;
+        .create(true)
+        .open(file_path)?;
+
+    // Write API function first, then data function
+    file.write_all(api_func.as_bytes())?;
+    file.write_all(data_func.as_bytes())?;
 
     Ok(func_name.to_string())
 }
-
 
 pub fn add_insert_func(row: &base_structs::Row, file_path: &std::path::Path) -> Result<String, io::Error> {
     // Ensure parent directories exist
@@ -83,43 +161,55 @@ pub fn add_insert_func(row: &base_structs::Row, file_path: &std::path::Path) -> 
 
     let cols: String = cols_list.iter().map(|col| format!("{}, ", col).to_string()).collect::<String>()
         .trim_end_matches(", ").to_string();
-        let bind_feilds = cols_list.iter().enumerate().map(|(i, col)| 
-        format!("\t.bind(payload.{})", cols_list[i]))
-        //format!("payload.{}, ", cols_list[i]))
+    let bind_fields = cols_list.iter().enumerate().map(|(i, col)| 
+        format!("\t\t.bind(payload.{})", cols_list[i]))
         .collect::<Vec<_>>().join("\n");
-    let feilds = cols_list.iter().enumerate().map(|(i, col)| format!("${}, ", i + 1)).collect::<String>()
+    let fields = cols_list.iter().enumerate().map(|(i, col)| format!("${}, ", i + 1)).collect::<String>()
         .trim_end_matches(", ").to_string();
-    let funk = format!(r###"
-
-async fn {funk_name}(
+    
+    // API layer function - calls data layer and can add business logic
+    let api_func = format!(r###"
+pub async fn {funk_name}(
     extract::State(pool): extract::State<PgPool>,
     Json(payload): Json<{struct_name}>,
 ) -> Json<Value> {{
-    let query = "INSERT INTO {table_name} ({cols}) VALUES ({feilds}) RETURNING *";
+    // Call data function from data module 
+    // Other business logic can also be handled here 
+    let result = data_{funk_name}(extract::State(pool), Json(payload)).await;
+    result
+}}
+"###);
+
+    // Data layer function - handles database operations
+    let data_func = format!(r###"
+pub async fn data_{funk_name}(
+    extract::State(pool): extract::State<PgPool>,
+    Json(payload): Json<{struct_name}>,
+) -> Json<Value> {{
+    let query = "INSERT INTO {table_name} ({cols}) VALUES ({fields}) RETURNING *";
     
     let q = sqlx::query_as::<_, {struct_name}>(&query)
-        {bind_feilds};
+{bind_fields};
     
     let result = q.fetch_one(&pool).await;
 
     match result {{
-        Ok(value) => Json(json!({{"res": "sucsess" }})), // maybe bad code??
+        Ok(value) => Json(json!({{"res": "success", "data": value}})),
         Err(e) => Json(json!({{"res": format!("error: {{}}", e)}}))
-
     }}
 }}
 "###);
 
-
+    // Write both functions to the same file
     let mut file = OpenOptions::new()
-        .write(true) // Enable writing to the file.
-        .append(true) // Set the append mode.  Crucially, this makes it append.
-        .create(true) // Create the file if it doesn't exist.
-        .open(file_path)?; // Open the file, returning a Result.
+        .write(true)
+        .append(true)
+        .create(true)
+        .open(file_path)?;
 
-
-
-    file.write_all(funk.as_bytes())?; // comment for testing 
+    // Write API function first, then data function
+    file.write_all(api_func.as_bytes())?;
+    file.write_all(data_func.as_bytes())?;
 
     Ok(funk_name.to_string())
 }
@@ -145,20 +235,36 @@ pub fn add_get_one_func(row: &base_structs::Row, col: &schema::Col, file_path: &
         col.name, col.name)
         .to_string()).collect::<String>()
         .trim_end_matches(", ").to_string();
-    // let val = val.unwrap();
-    // use match not res_json var
-    let funk_str = format!(r###"
+
+    // Query struct definition
+    let query_struct = format!(r###"
 #[derive(Debug, Deserialize)]
 struct {row_name}{col_name}Query {{
     {col_name}: {col_type},
 }}
+"###);
 
-async fn {func_name}(
+    // API layer function - calls data layer and can add business logic
+    let api_func = format!(r###"
+pub async fn {func_name}(
     extract::State(pool): extract::State<PgPool>,
-    match_val: Query<{row_name}{col_name}Query>, // Assuming col is a path parameter
+    match_val: Query<{row_name}{col_name}Query>,
+) -> Result<Json<Value>, (StatusCode, String)> {{
+    // Call data function from data module 
+    // Other business logic can also be handled here 
+    let result = data_{func_name}(extract::State(pool), match_val).await;
+    result
+}}
+"###);
+
+    // Data layer function - handles database operations
+    let data_func = format!(r###"
+pub async fn data_{func_name}(
+    extract::State(pool): extract::State<PgPool>,
+    match_val: Query<{row_name}{col_name}Query>,
 ) -> Result<Json<Value>, (StatusCode, String)> {{
     let query = format!("SELECT * FROM {row_name} WHERE {col_name} = $1");
-    let q = sqlx::query_as::<_, {struct_name}>(&query).bind(match_val.{col_name}.clone()); // todo: fugure out when .conle is needed
+    let q = sqlx::query_as::<_, {struct_name}>(&query).bind(match_val.{col_name}.clone());
 
     let elemint = q.fetch_optional(&pool).await.map_err(|e| {{
         (StatusCode::INTERNAL_SERVER_ERROR, format!("Database err{{}}", e))
@@ -175,14 +281,17 @@ async fn {func_name}(
 }}
 "###);
 
+    // Write all parts to the same file
     let mut file = OpenOptions::new()
-        .write(true) // Enable writing to the file.
-        .append(true) // Set the append mode.  Crucially, this makes it append.
-        .create(true) // Create the file if it doesn't exist.
-        .open(file_path)?; // Open the file, returning a Result.
+        .write(true)
+        .append(true)
+        .create(true)
+        .open(file_path)?;
 
-    file.write_all(funk_str.as_bytes())?; // comment for testing 
-
+    // Write query struct, API function, then data function
+    file.write_all(query_struct.as_bytes())?;
+    file.write_all(api_func.as_bytes())?;
+    file.write_all(data_func.as_bytes())?;
 
     Ok(func_name.to_string())
 }
