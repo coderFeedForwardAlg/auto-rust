@@ -198,6 +198,7 @@ async fn main() -> Result<(), std::io::Error> {
 
     let _ = create_react_app("../".to_owned() + project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
 
+
     let addr: SocketAddr = "0.0.0.0:8081".parse().unwrap();
     match TcpListener::bind(&addr) {
         // If the bind operation is successful, it means the port was available.
@@ -232,6 +233,7 @@ async fn main() -> Result<(), std::io::Error> {
 
 
             }
+
         }
     }
     Ok(())
