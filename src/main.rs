@@ -15,6 +15,7 @@ mod boilerplate;
 mod add_react;
 
 use add_react::create_react_app;
+use gen_toml::gen_toml;
 use add_minio::add_minio;
 use add_object::add_object;
 use add_compose::add_compose;
@@ -80,8 +81,6 @@ async fn main() -> Result<(), std::io::Error> {
     io::stdin().read_line(&mut file_name)?;
     let file_name = file_name.trim().to_string();
     
-    let current_dir = std::env::current_dir()?;
-    
     let parent_dir = std::env::current_dir()?.parent()
         .ok_or_else(|| std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -129,7 +128,6 @@ async fn main() -> Result<(), std::io::Error> {
     match gen_sql::gen_sql(project_dir.clone(), file_name.clone(), sql_task).await {
         Ok(content) => {
             println!("Successfully generated SQL ({} bytes)", content.len());
-            println!("SQL content preview: {}", content.chars().take(100).collect::<String>());
         },
         Err(e) => {
             return Err(std::io::Error::new(
@@ -138,10 +136,6 @@ async fn main() -> Result<(), std::io::Error> {
             ));
         }
     }
-    
-    // Change back to the original directory
-    println!("Changing back to original directory: {:?}", current_dir);
-    std::env::set_current_dir(&current_dir)?;
     
     // Process the generated SQL file
     let sql_path = project_dir.join("migrations/0001_data.sql");
