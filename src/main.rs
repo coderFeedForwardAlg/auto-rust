@@ -13,7 +13,10 @@ mod add_object;
 mod add_minio;
 mod boilerplate;
 mod add_react;
+mod gen_examples;
 
+
+use gen_examples::gen_examples;
 use add_react::create_react_app;
 use gen_toml::gen_toml;
 use add_minio::add_minio;
@@ -170,15 +173,17 @@ async fn main() -> Result<(), std::io::Error> {
 
     // TODO: rename, this creates select all, select one, and add functions. 
     add_basic_sql_funcs(rows, &path , &mut func_names)?;
+    println!("function names after basic sql are {:?}", func_names);
 
     // TODO: this looks like a dublicat of the add_minio function 
     // add_object(&path);
-    add_axum_end(func_names, &path)?;
+    add_axum_end(func_names.clone(), &path)?;
     let docker_res = gen_docker(project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
     match docker_res {
         Ok(_) => println!("Dockerfile created at {}", project_dir.to_str().unwrap().to_owned()),
         Err(e) => eprintln!("Error creating Dockerfile: {}", e),
     }
+    println!("function names after axum end are {:?}", func_names);
     let compose = add_compose(project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
     match compose {
         Ok(_) => println!("Docker compose created at {}", project_dir.to_str().unwrap().to_owned()),
@@ -192,6 +197,12 @@ async fn main() -> Result<(), std::io::Error> {
 
     let _ = create_react_app("../".to_owned() + project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
 
+    let gen_examples_res = gen_examples(&project_dir.file_name().expect("Failed to get file name").to_str().unwrap(), func_names.clone());
+    println!("function names after gen examples are {:?}", func_names); 
+    match gen_examples_res {
+        Ok(_) => println!("Examples generated at {}", project_dir.to_str().unwrap().to_owned()),
+        Err(e) => eprintln!("Error generating examples: {}", e),
+    }
     let addr: SocketAddr = "0.0.0.0:8081".parse().unwrap();
     match TcpListener::bind(&addr) {
         // If the bind operation is successful, it means the port was available.
