@@ -14,8 +14,10 @@ mod add_minio;
 mod boilerplate;
 mod add_react;
 mod gen_examples;
+mod add_fastapi;
 
 
+use add_fastapi::add_fastapi;
 use gen_examples::gen_examples;
 use add_react::create_react_app;
 use gen_toml::gen_toml;
@@ -203,6 +205,15 @@ async fn main() -> Result<(), std::io::Error> {
         Ok(_) => println!("Examples generated at {}", project_dir.to_str().unwrap().to_owned()),
         Err(e) => eprintln!("Error generating examples: {}", e),
     }
+
+
+    let fastapi_res = add_fastapi(&project_dir.file_name().expect("faild to get the file name for fast api func").to_str().unwrap());
+
+    match fastapi_res {
+        Ok(_) => println!("added the fastapi folder "),
+        Err(e) => eprintln!("error while adding the fastapi folder: {}", e)
+    }
+
     let addr: SocketAddr = "0.0.0.0:8081".parse().unwrap();
     match TcpListener::bind(&addr) {
         // If the bind operation is successful, it means the port was available.
