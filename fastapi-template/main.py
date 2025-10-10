@@ -52,11 +52,10 @@ def get_chat_response(prompt: str) -> str | None:
 
 app = FastAPI()
 
-@app.post("/chat")
-async def chat(request: dict) -> str | None:
-    if "prompt" not in request:
-        return "Error: 'prompt' field is required"
-    return get_chat_response(request["prompt"])
+@app.get("/chat")
+async def chat() -> str | None:
+    return "working api connection" 
+
 
 if __name__ == "__main__":
     import uvicorn
