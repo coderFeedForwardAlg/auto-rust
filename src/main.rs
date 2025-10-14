@@ -13,8 +13,15 @@ mod add_object;
 mod add_minio;
 mod boilerplate;
 mod add_react;
+mod gen_examples;
+mod add_fastapi;
+mod add_python;
 
+use add_python::add_python_func;
+use add_fastapi::add_fastapi;
+use gen_examples::gen_examples;
 use add_react::create_react_app;
+use gen_toml::gen_toml;
 use add_minio::add_minio;
 use add_object::add_object;
 use add_compose::add_compose;
@@ -25,7 +32,6 @@ use std::fs::OpenOptions;
 use std::io::{self, BufWriter};
 use convert_case::{Case, Casing};
 use serde::de::value::{self, Error};
-use serde::Deserialize;
 use sqlx::FromRow;
 use std::io::Write;
 pub use schema::{extract_column_info, extract_table_schemas, extract_table_names, Col};
@@ -80,8 +86,6 @@ async fn main() -> Result<(), std::io::Error> {
     io::stdin().read_line(&mut file_name)?;
     let file_name = file_name.trim().to_string();
     
-    let current_dir = std::env::current_dir()?;
-    
     let parent_dir = std::env::current_dir()?.parent()
         .ok_or_else(|| std::io::Error::new(
             std::io::ErrorKind::Other,
@@ -129,7 +133,6 @@ async fn main() -> Result<(), std::io::Error> {
     match gen_sql::gen_sql(project_dir.clone(), file_name.clone(), sql_task).await {
         Ok(content) => {
             println!("Successfully generated SQL ({} bytes)", content.len());
-            println!("SQL content preview: {}", content.chars().take(100).collect::<String>());
         },
         Err(e) => {
             return Err(std::io::Error::new(
@@ -138,10 +141,6 @@ async fn main() -> Result<(), std::io::Error> {
             ));
         }
     }
-    
-    // Change back to the original directory
-    println!("Changing back to original directory: {:?}", current_dir);
-    std::env::set_current_dir(&current_dir)?;
     
     // Process the generated SQL file
     let sql_path = project_dir.join("migrations/0001_data.sql");
@@ -176,15 +175,18 @@ async fn main() -> Result<(), std::io::Error> {
 
     // TODO: rename, this creates select all, select one, and add functions. 
     add_basic_sql_funcs(rows, &path , &mut func_names)?;
+    println!("function names after basic sql are {:?}", func_names);
+    add_python_func(&path)?;
 
     // TODO: this looks like a dublicat of the add_minio function 
     // add_object(&path);
-    add_axum_end(func_names, &path)?;
+    add_axum_end(func_names.clone(), &path)?;
     let docker_res = gen_docker(project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
     match docker_res {
         Ok(_) => println!("Dockerfile created at {}", project_dir.to_str().unwrap().to_owned()),
         Err(e) => eprintln!("Error creating Dockerfile: {}", e),
     }
+    println!("function names after axum end are {:?}", func_names);
     let compose = add_compose(project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
     match compose {
         Ok(_) => println!("Docker compose created at {}", project_dir.to_str().unwrap().to_owned()),
@@ -198,6 +200,20 @@ async fn main() -> Result<(), std::io::Error> {
 
     let _ = create_react_app("../".to_owned() + project_dir.file_name().expect("Failed to get file name").to_str().unwrap());
 
+    let gen_examples_res = gen_examples(&project_dir.file_name().expect("Failed to get file name").to_str().unwrap(), func_names.clone());
+    println!("function names after gen examples are {:?}", func_names); 
+    match gen_examples_res {
+        Ok(_) => println!("Examples generated at {}", project_dir.to_str().unwrap().to_owned()),
+        Err(e) => eprintln!("Error generating examples: {}", e),
+    }
+
+
+    let fastapi_res = add_fastapi(&project_dir.file_name().expect("faild to get the file name for fast api func").to_str().unwrap());
+
+    match fastapi_res {
+        Ok(_) => println!("added the fastapi folder "),
+        Err(e) => eprintln!("error while adding the fastapi folder: {}", e)
+    }
 
     let addr: SocketAddr = "0.0.0.0:8081".parse().unwrap();
     match TcpListener::bind(&addr) {

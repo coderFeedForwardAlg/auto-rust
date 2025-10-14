@@ -9,6 +9,17 @@ let compose = format!(
 version: '3.8'
 
 services:
+  nginx:
+    image: nginx:alpine
+    ports:
+      - \"3002:80\"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - app
+      - frontend
+      - python
+
   db:
     image: postgres:15-alpine
     environment:
@@ -60,8 +71,6 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    ports:
-      - \"8081:8081\"
     environment:
       DATABASE_URL: \"postgres://dbuser:p@db:5432/data\"
       DATABASE_CONNECT_TIMEOUT: \"30\"
@@ -77,15 +86,26 @@ services:
       retries: 5
       start_period: 30s
 
+
   frontend:
     build:
       context: ./frontend
-      dockerfile: Dockerfile
-    ports:
-      - \"80:80\" 
     depends_on:
       - app
-    restart: on-failure
+
+  python:
+    build:
+      context: ./fastapi-template
+    depends_on:
+      - app
+    ports:
+      - \"8003:8003\"
+    healthcheck:
+      test: [\"CMD\", \"wget\", \"--spider\", \"http://localhost:8003/health\"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   postgres_data:
@@ -102,6 +122,50 @@ volumes:
   file.write_all(compose.as_bytes())?;
   
   println!("compose created at {}", compose_path);
+
+  // nginx 
+
+  let nginx = format!(
+    "events {{}}
+
+http {{
+    server {{
+        listen 80;
+
+        location / {{
+            proxy_pass http://frontend:3000;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }}
+
+        location /api/ {{
+            proxy_pass http://app:8081/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }}
+
+        location /python/ {{
+            proxy_pass http://python:8003/;
+            proxy_set_header Host $host;
+            proxy_set_header X-Real-IP $remote_addr;
+            proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+            proxy_set_header X-Forwarded-Proto $scheme;
+        }}
+    }}
+}}"
+  );
+
+  let nginx_path = format!("../{}/nginx/nginx.conf", path);
+  std::fs::create_dir_all(format!("../{}/nginx", path))?;
+  let mut file = File::create(&nginx_path)?;
+  file.write_all(nginx.as_bytes())?;
+  
+  println!("nginx created at {}", nginx_path);
+
   Ok(())
 }
 
