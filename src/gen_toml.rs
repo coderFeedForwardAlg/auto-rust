@@ -30,6 +30,7 @@ uuid = { version = \"1\", features = [\"serde\", \"v4\"] } # For UUID generation
 tempfile = \"3.3\"
 anyhow = \"1.0\"
 minio-rsc = \"0.2.6\"
+reqwest = { version = \"0.11\", features = [\"json\"] }
     ";
  
     let mut file = OpenOptions::new()

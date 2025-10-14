@@ -279,8 +279,9 @@ pub async fn data_{func_name}(
         None => Err((StatusCode::NOT_FOUND, format!("No record found with {col_name} = the value"))),
     }}
 }}
-"###);
 
+
+"###);
     // Write all parts to the same file
     let mut file = OpenOptions::new()
         .write(true)

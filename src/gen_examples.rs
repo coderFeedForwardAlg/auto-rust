@@ -10,13 +10,13 @@ pub fn gen_examples(path: &str, func_names: Vec<String>) -> Result<(), Box<dyn s
     
     
     for func_name in func_names {
-        // the if only has two paths becasue right now there is only add and get functions 
+        // the if only has two paths because right now there is only add and get functions 
         // will need to fix for update and delete
         if func_name.contains("add") {
-            // pritn struct 
+            // print struct 
             println!("struct is {}", "struct name");
             example.push_str(format!("
-            fetch(\"http//localhost:3002/api/{}\", {{
+            fetch(\"http://localhost:3002/api/{}\", {{
                 method: 'POST',
                 headers: {{
                     'Content-Type': 'application/json'
@@ -39,7 +39,7 @@ pub fn gen_examples(path: &str, func_names: Vec<String>) -> Result<(), Box<dyn s
     println!("example string is {}", example);
     println!("");
     println!("");
-    println!("etempting to write to {}\n", "../".to_owned() + path + "/examples.js");
+    println!("attempting to write to {}\n", "../".to_owned() + path + "/examples.js");
     println!("");
     println!("");
     let mut file = std::fs::File::create("../".to_owned() + path + "/examples.js")?;

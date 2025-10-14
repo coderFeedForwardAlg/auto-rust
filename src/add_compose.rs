@@ -18,6 +18,7 @@ services:
     depends_on:
       - app
       - frontend
+      - python
 
   db:
     image: postgres:15-alpine
@@ -91,6 +92,20 @@ services:
       context: ./frontend
     depends_on:
       - app
+
+  python:
+    build:
+      context: ./fastapi-template
+    depends_on:
+      - app
+    ports:
+      - \"8003:8003\"
+    healthcheck:
+      test: [\"CMD\", \"wget\", \"--spider\", \"http://localhost:8003/health\"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
 volumes:
   postgres_data:

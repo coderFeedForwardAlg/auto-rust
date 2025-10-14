@@ -36,6 +36,8 @@ use sqlx::types::chrono::Utc;
 use std::collections::HashMap;
 use tower_http::cors::{AllowOrigin, CorsLayer};
 use axum::http::Method;
+use reqwest;
+
 
 "###;
     file.write_all(top_boiler.as_bytes())?;
@@ -96,6 +98,7 @@ async fn main() -> Result<(), Box<dyn std::error::Error>> {{
     let app = Router::new()
     .route("/health", get(health))
     {routs}
+    .route("/python", get(python))
     .layer(
         CorsLayer::new()
             .allow_origin(AllowOrigin::list(vec![

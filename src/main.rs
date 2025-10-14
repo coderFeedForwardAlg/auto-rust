@@ -15,8 +15,9 @@ mod boilerplate;
 mod add_react;
 mod gen_examples;
 mod add_fastapi;
+mod add_python;
 
-
+use add_python::add_python_func;
 use add_fastapi::add_fastapi;
 use gen_examples::gen_examples;
 use add_react::create_react_app;
@@ -31,7 +32,6 @@ use std::fs::OpenOptions;
 use std::io::{self, BufWriter};
 use convert_case::{Case, Casing};
 use serde::de::value::{self, Error};
-use serde::Deserialize;
 use sqlx::FromRow;
 use std::io::Write;
 pub use schema::{extract_column_info, extract_table_schemas, extract_table_names, Col};
@@ -176,6 +176,7 @@ async fn main() -> Result<(), std::io::Error> {
     // TODO: rename, this creates select all, select one, and add functions. 
     add_basic_sql_funcs(rows, &path , &mut func_names)?;
     println!("function names after basic sql are {:?}", func_names);
+    add_python_func(&path)?;
 
     // TODO: this looks like a dublicat of the add_minio function 
     // add_object(&path);

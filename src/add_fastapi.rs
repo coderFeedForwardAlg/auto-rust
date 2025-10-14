@@ -1,5 +1,5 @@
 use fs_extra::dir::{copy, CopyOptions};
-use std::{fmt::format, path::Path};
+use std::path::Path;
 pub fn add_fastapi(path: &str) -> Result<(), Box<dyn std::error::Error>> {
     let from = Path::new("fastapi-template");
     let destination = format!("../{}", path);
@@ -12,13 +12,7 @@ pub fn add_fastapi(path: &str) -> Result<(), Box<dyn std::error::Error>> {
     // This function handles creating destination folders and copying all files/subdirectories
 
 
-    let copy_res = copy(from, to, &options);
-
-    match copy_res{
-        Ok(_) => println!("copyed fast api worked "),
-        Err(e) => println!("error happend: {}", e)
-    }
-
+    copy(from, to, &options).map_err(|e| Box::<dyn std::error::Error>::from(e))?;
     println!("✅ Directory copied successfully!");
     Ok(())
 }
